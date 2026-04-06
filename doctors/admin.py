@@ -167,11 +167,8 @@ class DoctorInviteAdmin(admin.ModelAdmin):
         frontend_url = getattr(settings, "FRONTEND_URL", "http://localhost:3000")
         invite_link  = f"{frontend_url}/set-doctor-password?uid={uid}&token={token}"
 
-        threading.Thread(
-            target=_send_invite_email,
-            args=(user.email, user.first_name, invite_link),
-            daemon=True,
-        ).start()
+        # Send synchronously so SMTP errors surface in logs/admin.
+        _send_invite_email(user.email, user.first_name, invite_link)
 
         self.message_user(
             request,
@@ -283,11 +280,8 @@ class DoctorProfileAdmin(admin.ModelAdmin):
             uid   = urlsafe_base64_encode(force_bytes(user.pk))
             token = default_token_generator.make_token(user)
             link  = f"{frontend_url}/set-doctor-password?uid={uid}&token={token}"
-            threading.Thread(
-                target=_send_invite_email,
-                args=(user.email, user.first_name, link),
-                daemon=True,
-            ).start()
+            # Send synchronously so SMTP errors surface in logs/admin.
+            _send_invite_email(user.email, user.first_name, link)
             sent += 1
         if sent:
             self.message_user(request, f"Activation email resent to {sent} doctor(s).", messages.SUCCESS)

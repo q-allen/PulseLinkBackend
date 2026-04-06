@@ -247,11 +247,8 @@ class InviteDoctorView(APIView):
         token = default_token_generator.make_token(user)
         invite_url = f"{FRONTEND_URL}/set-doctor-password?uid={uid}&token={token}"
 
-        threading.Thread(
-            target=_send_invite_email,
-            args=(user.email, user.first_name, invite_url),
-            daemon=True,
-        ).start()
+        # Send synchronously so SMTP errors surface in logs/response.
+        _send_invite_email(user.email, user.first_name, invite_url)
 
         return Response(
             {"detail": "Doctor invited. Activation email sent."},
