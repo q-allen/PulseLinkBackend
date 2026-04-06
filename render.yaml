@@ -2,8 +2,8 @@ services:
   - type: web
     name: careconnect-backend
     runtime: python
-    buildCommand: pip install -r requirements.txt && python manage.py collectstatic --noinput && python manage.py migrate
-    startCommand: daphne -b 0.0.0.0 -p $PORT backend.asgi:application
+    buildCommand: pip install -r requirements.txt && python manage.py collectstatic --noinput --clear && python manage.py migrate
+    startCommand: gunicorn backend.wsgi:application --bind 0.0.0.0:$PORT
     healthCheckPath: /api/health/
     envVars:
       - key: DEBUG
