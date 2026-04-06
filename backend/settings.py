@@ -263,22 +263,47 @@ STORAGES = {
 
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
-# ── Email (Brevo SMTP) ────────────────────────────────────────────────────────
-EMAIL_BACKEND = "django.core.mail.backends.smtp.EmailBackend"
-EMAIL_HOST = os.environ.get("EMAIL_HOST", "smtp-relay.brevo.com")
-EMAIL_PORT = int(os.environ.get("EMAIL_PORT", "587"))
-EMAIL_USE_TLS = os.environ.get("EMAIL_USE_TLS", "True") == "True"
-EMAIL_USE_SSL = os.environ.get("EMAIL_USE_SSL", "False") == "True"
-EMAIL_HOST_USER = os.environ.get("EMAIL_HOST_USER")
-EMAIL_HOST_PASSWORD = os.environ.get("EMAIL_HOST_PASSWORD")
-DEFAULT_FROM_EMAIL = os.environ.get("DEFAULT_FROM_EMAIL") or EMAIL_HOST_USER
+# ── Email (Brevo HTTP API default; SMTP optional) ─────────────────────────────
+USE_BREVO_API = os.environ.get("USE_BREVO_API", "True") == "True"
+
+DEFAULT_FROM_EMAIL = os.environ.get("DEFAULT_FROM_EMAIL")
 EMAIL_TIMEOUT = int(os.environ.get("EMAIL_TIMEOUT", "10"))
 
-if not DEBUG:
-    if not EMAIL_HOST_USER:
-        raise RuntimeError("EMAIL_HOST_USER must be set in production.")
-    if not EMAIL_HOST_PASSWORD:
-        raise RuntimeError("EMAIL_HOST_PASSWORD (Brevo SMTP key) must be set in production.")
+if USE_BREVO_API:
+    EMAIL_BACKEND = "backend.email_backends.brevo.BrevoEmailBackend"
+    BREVO_API_KEY = os.environ.get("BREVO_API_KEY")
+    BREVO_API_URL = os.environ.get("BREVO_API_URL", "https://api.brevo.com/v3/smtp/email")
+    BREVO_TIMEOUT = int(os.environ.get("BREVO_TIMEOUT", "10"))
+    BREVO_SENDER_EMAIL = (
+        os.environ.get("BREVO_SENDER_EMAIL")
+        or DEFAULT_FROM_EMAIL
+        or os.environ.get("EMAIL_HOST_USER")
+    )
+    BREVO_SENDER_NAME = os.environ.get("BREVO_SENDER_NAME", "CareConnect")
+
+    if not DEFAULT_FROM_EMAIL and BREVO_SENDER_EMAIL:
+        DEFAULT_FROM_EMAIL = BREVO_SENDER_EMAIL
+
+    if not DEBUG and not BREVO_API_KEY:
+        raise RuntimeError("BREVO_API_KEY must be set in production.")
+    if not DEBUG and not BREVO_SENDER_EMAIL:
+        raise RuntimeError("BREVO_SENDER_EMAIL or DEFAULT_FROM_EMAIL must be set in production.")
+else:
+    EMAIL_BACKEND = "django.core.mail.backends.smtp.EmailBackend"
+    EMAIL_HOST = os.environ.get("EMAIL_HOST", "smtp-relay.brevo.com")
+    EMAIL_PORT = int(os.environ.get("EMAIL_PORT", "587"))
+    EMAIL_USE_TLS = os.environ.get("EMAIL_USE_TLS", "True") == "True"
+    EMAIL_USE_SSL = os.environ.get("EMAIL_USE_SSL", "False") == "True"
+    EMAIL_HOST_USER = os.environ.get("EMAIL_HOST_USER")
+    EMAIL_HOST_PASSWORD = os.environ.get("EMAIL_HOST_PASSWORD")
+    if not DEFAULT_FROM_EMAIL:
+        DEFAULT_FROM_EMAIL = EMAIL_HOST_USER
+
+    if not DEBUG:
+        if not EMAIL_HOST_USER:
+            raise RuntimeError("EMAIL_HOST_USER must be set in production.")
+        if not EMAIL_HOST_PASSWORD:
+            raise RuntimeError("EMAIL_HOST_PASSWORD (Brevo SMTP key) must be set in production.")
 
 AUTH_USER_MODEL = "users.User"
 
