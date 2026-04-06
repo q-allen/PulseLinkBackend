@@ -1,0 +1,202 @@
+{% extends "admin/base_site.html" %}
+{% load i18n static log %}
+
+{% block bodyclass %}{{ block.super }} dashboard{% endblock %}
+{% block content_title %}Dashboard{% endblock %}
+
+{% block breadcrumbs %}
+<ol class="breadcrumb">
+  <li class="breadcrumb-item"><a href="{% url 'admin:index' %}">Home</a></li>
+  <li class="breadcrumb-item active">Dashboard</li>
+</ol>
+{% endblock %}
+
+{% block content %}
+
+{# ── Stat Cards ──────────────────────────────────────────────────────────── #}
+<div class="col-12 mb-3">
+  <div class="row g-3">
+
+    <div class="col-xl-2 col-md-4 col-sm-6">
+      <div class="cc-stat-card cc-card-blue">
+        <div class="cc-stat-top">
+          <div class="cc-stat-icon"><i class="fas fa-users"></i></div>
+          <div class="cc-stat-value">{{ stats.total_users }}</div>
+        </div>
+        <div class="cc-stat-bottom">
+          <div class="cc-stat-label">Total Users</div>
+          <div class="cc-stat-sub">{{ stats.new_users_today }} new today</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="col-xl-2 col-md-4 col-sm-6">
+      <div class="cc-stat-card cc-card-purple">
+        <div class="cc-stat-top">
+          <div class="cc-stat-icon"><i class="fas fa-user-md"></i></div>
+          <div class="cc-stat-value">{{ stats.total_doctors }}</div>
+        </div>
+        <div class="cc-stat-bottom">
+          <div class="cc-stat-label">Doctors</div>
+          <div class="cc-stat-sub">{{ stats.verified_doctors }} verified</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="col-xl-2 col-md-4 col-sm-6">
+      <div class="cc-stat-card cc-card-teal">
+        <div class="cc-stat-top">
+          <div class="cc-stat-icon"><i class="fas fa-calendar-check"></i></div>
+          <div class="cc-stat-value">{{ stats.appointments_today }}</div>
+        </div>
+        <div class="cc-stat-bottom">
+          <div class="cc-stat-label">Appts Today</div>
+          <div class="cc-stat-sub">{{ stats.pending_appointments }} pending</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="col-xl-2 col-md-4 col-sm-6">
+      <div class="cc-stat-card cc-card-amber">
+        <div class="cc-stat-top">
+          <div class="cc-stat-icon"><i class="fas fa-clock"></i></div>
+          <div class="cc-stat-value">{{ stats.pending_verifications }}</div>
+        </div>
+        <div class="cc-stat-bottom">
+          <div class="cc-stat-label">Pending Doctors</div>
+          <div class="cc-stat-sub">Awaiting review</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="col-xl-2 col-md-4 col-sm-6">
+      <div class="cc-stat-card cc-card-green">
+        <div class="cc-stat-top">
+          <div class="cc-stat-icon"><i class="fas fa-shopping-bag"></i></div>
+          <div class="cc-stat-value">{{ stats.pharmacy_orders }}</div>
+        </div>
+        <div class="cc-stat-bottom">
+          <div class="cc-stat-label">Pharmacy Orders</div>
+          <div class="cc-stat-sub">{{ stats.pending_orders }} pending</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="col-xl-2 col-md-4 col-sm-6">
+      <div class="cc-stat-card cc-card-pink">
+        <div class="cc-stat-top">
+          <div class="cc-stat-icon"><i class="fas fa-id-card"></i></div>
+          <div class="cc-stat-value">{{ stats.pending_hmo }}</div>
+        </div>
+        <div class="cc-stat-bottom">
+          <div class="cc-stat-label">HMO Pending</div>
+          <div class="cc-stat-sub">Awaiting review</div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+{# ── Recent Appointments ─────────────────────────────────────────────────── #}
+<div class="col-lg-7 col-12 mb-3">
+  <div class="card h-100">
+    <div class="card-header d-flex align-items-center">
+      <i class="fas fa-calendar-alt me-2 cc-icon-color-teal"></i>
+      <strong>Recent Appointments</strong>
+      <a href="{% url 'admin:appointments_appointment_changelist' %}" class="ms-auto cc-view-all">View all →</a>
+    </div>
+    <div class="card-body p-0">
+      <table class="cc-table w-100">
+        <thead>
+          <tr><th>Patient</th><th>Doctor</th><th>Date</th><th>Status</th></tr>
+        </thead>
+        <tbody>
+          {% for appt in recent_appointments %}
+          <tr>
+            <td>{{ appt.patient.get_full_name|default:appt.patient.email }}</td>
+            <td>{{ appt.doctor.get_full_name|default:appt.doctor.email }}</td>
+            <td>{{ appt.date }}</td>
+            <td><span class="badge-status badge-{{ appt.status }}">{{ appt.get_status_display }}</span></td>
+          </tr>
+          {% empty %}
+          <tr><td colspan="4" class="text-center text-muted py-3">No appointments yet</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+{# ── Right column: Pending Doctors + Recent Actions ──────────────────────── #}
+<div class="col-lg-5 col-12 mb-3">
+
+  {# Pending Doctor Verifications #}
+  <div class="card mb-3">
+    <div class="card-header d-flex align-items-center">
+      <i class="fas fa-user-md me-2 cc-icon-color-purple"></i>
+      <strong>Doctors Awaiting Verification</strong>
+      <a href="{% url 'admin:doctors_doctorprofile_changelist' %}?is_verified__exact=0" class="ms-auto cc-view-all">View all →</a>
+    </div>
+    <div class="card-body p-0">
+      <table class="cc-table w-100">
+        <thead>
+          <tr><th>Name</th><th>Specialty</th><th>Joined</th></tr>
+        </thead>
+        <tbody>
+          {% for doc in pending_doctors %}
+          <tr>
+            <td><a href="{% url 'admin:doctors_doctorprofile_change' doc.pk %}">{{ doc.user.get_full_name|default:doc.user.email }}</a></td>
+            <td>{{ doc.specialty }}</td>
+            <td>{{ doc.created_at|date:"M d" }}</td>
+          </tr>
+          {% empty %}
+          <tr><td colspan="3" class="text-center text-muted py-3">All doctors verified ✓</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  {# Recent Admin Actions #}
+  <div class="card">
+    <div class="card-header">
+      <i class="fas fa-history me-2 cc-icon-color-slate"></i>
+      <strong>Recent Actions</strong>
+    </div>
+    <div class="card-body p-0">
+      {% get_admin_log 6 as admin_log for_user user %}
+      {% if admin_log %}
+      <div class="cc-action-list">
+        {% for entry in admin_log %}
+        <div class="cc-action-item">
+          {% if entry.is_addition %}
+            <span class="cc-action-dot cc-dot-green"></span>
+          {% elif entry.is_change %}
+            <span class="cc-action-dot cc-dot-blue"></span>
+          {% else %}
+            <span class="cc-action-dot cc-dot-red"></span>
+          {% endif %}
+          <div class="cc-action-body">
+            {% if entry.is_deletion or not entry.get_admin_url %}
+              <span>{{ entry.object_repr }}</span>
+            {% else %}
+              <a href="{{ entry.get_admin_url }}">{{ entry.object_repr }}</a>
+            {% endif %}
+            {% if entry.content_type %}
+              <span class="cc-action-model">{{ entry.content_type.name }}</span>
+            {% endif %}
+            <span class="cc-action-time">{{ entry.action_time|timesince }} ago</span>
+          </div>
+        </div>
+        {% endfor %}
+      </div>
+      {% else %}
+      <p class="text-center text-muted py-3 mb-0">No recent actions</p>
+      {% endif %}
+    </div>
+  </div>
+
+</div>
+
+{% endblock %}

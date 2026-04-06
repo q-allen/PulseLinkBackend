@@ -1,0 +1,231 @@
+{% extends "admin/base_site.html" %}
+{% load i18n %}
+
+{% block title %}Invite Doctor{% endblock %}
+
+{% block content %}
+<div class="mb-6">
+  <h1 class="text-2xl font-semibold text-gray-900 dark:text-white">Invite Doctor</h1>
+  <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
+    Fill in the details below. The doctor will receive an activation email with a secure link to set their password.
+  </p>
+  <div class="mt-3 rounded-md border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/40 px-4 py-2 text-xs text-gray-600 dark:text-gray-300">
+    Required: First/Last name, Email, Phone, Specialty, Clinic, PRC License.
+  </div>
+</div>
+
+<form method="post" class="space-y-6 max-w-3xl">
+  {% csrf_token %}
+
+  {% if form.errors %}
+  <div class="rounded-md bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 p-4">
+    <p class="text-sm font-medium text-red-800 dark:text-red-400">Please fix the errors below:</p>
+    <div class="mt-2 space-y-1 text-sm text-red-700 dark:text-red-300">
+      {% for field in form %}{% for error in field.errors %}
+        <p>• <strong>{{ field.label }}:</strong> {{ error }}</p>
+      {% endfor %}{% endfor %}
+      {% for error in form.non_field_errors %}
+        <p>• {{ error }}</p>
+      {% endfor %}
+    </div>
+  </div>
+  {% endif %}
+
+  <div class="grid grid-cols-1 gap-6">
+    <section class="rounded-lg border border-slate-300/80 dark:border-slate-700/80 bg-gradient-to-br from-slate-100 via-slate-50 to-slate-200 dark:from-slate-950 dark:via-slate-900 dark:to-slate-800 p-5 shadow-sm ring-1 ring-white/70 dark:ring-white/5">
+      <h2 class="text-sm font-semibold text-gray-900 dark:text-gray-100 uppercase tracking-wide">Personal Details</h2>
+      <div class="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
+        {% with field=form.first_name %}
+        <div>
+          <label for="{{ field.id_for_label }}" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+            {{ field.label }}{% if field.field.required %}<span class="text-red-500 ml-0.5">*</span>{% endif %}
+          </label>
+          <input
+            type="text"
+            name="{{ field.html_name }}"
+            id="{{ field.id_for_label }}"
+            value="{{ field.value|default_if_none:'' }}"
+            required
+            autocomplete="given-name"
+            class="block w-full rounded-md border border-gray-300 dark:border-gray-700
+                   bg-gray-50 dark:bg-gray-950 text-gray-900 dark:text-gray-100
+                   px-3 py-2 text-sm shadow-sm placeholder:text-gray-400 dark:placeholder:text-gray-500
+                   focus:border-teal-500 focus:outline-none focus:ring-2 focus:ring-teal-500/40
+                   {% if field.errors %}border-red-500{% endif %}"
+          >
+        </div>
+        {% endwith %}
+
+        {% with field=form.middle_name %}
+        <div>
+          <label for="{{ field.id_for_label }}" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+            {{ field.label }}
+          </label>
+          <input
+            type="text"
+            name="{{ field.html_name }}"
+            id="{{ field.id_for_label }}"
+            value="{{ field.value|default_if_none:'' }}"
+            autocomplete="additional-name"
+            class="block w-full rounded-md border border-gray-300 dark:border-gray-700
+                   bg-gray-50 dark:bg-gray-950 text-gray-900 dark:text-gray-100
+                   px-3 py-2 text-sm shadow-sm placeholder:text-gray-400 dark:placeholder:text-gray-500
+                   focus:border-teal-500 focus:outline-none focus:ring-2 focus:ring-teal-500/40
+                   {% if field.errors %}border-red-500{% endif %}"
+          >
+        </div>
+        {% endwith %}
+
+        {% with field=form.last_name %}
+        <div>
+          <label for="{{ field.id_for_label }}" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+            {{ field.label }}{% if field.field.required %}<span class="text-red-500 ml-0.5">*</span>{% endif %}
+          </label>
+          <input
+            type="text"
+            name="{{ field.html_name }}"
+            id="{{ field.id_for_label }}"
+            value="{{ field.value|default_if_none:'' }}"
+            required
+            autocomplete="family-name"
+            class="block w-full rounded-md border border-gray-300 dark:border-gray-700
+                   bg-gray-50 dark:bg-gray-950 text-gray-900 dark:text-gray-100
+                   px-3 py-2 text-sm shadow-sm placeholder:text-gray-400 dark:placeholder:text-gray-500
+                   focus:border-teal-500 focus:outline-none focus:ring-2 focus:ring-teal-500/40
+                   {% if field.errors %}border-red-500{% endif %}"
+          >
+        </div>
+        {% endwith %}
+
+        {% with field=form.email %}
+        <div class="sm:col-span-2">
+          <label for="{{ field.id_for_label }}" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+            {{ field.label }}{% if field.field.required %}<span class="text-red-500 ml-0.5">*</span>{% endif %}
+          </label>
+          <input
+            type="email"
+            name="{{ field.html_name }}"
+            id="{{ field.id_for_label }}"
+            value="{{ field.value|default_if_none:'' }}"
+            required
+            autocomplete="email"
+            placeholder="doctor@example.com"
+            class="block w-full rounded-md border border-gray-300 dark:border-gray-700
+                   bg-gray-50 dark:bg-gray-950 text-gray-900 dark:text-gray-100
+                   px-3 py-2 text-sm shadow-sm placeholder:text-gray-400 dark:placeholder:text-gray-500
+                   focus:border-teal-500 focus:outline-none focus:ring-2 focus:ring-teal-500/40
+                   {% if field.errors %}border-red-500{% endif %}"
+          >
+        </div>
+        {% endwith %}
+
+        {% with field=form.phone %}
+        <div class="sm:col-span-2">
+          <label for="{{ field.id_for_label }}" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+            {{ field.label }}{% if field.field.required %}<span class="text-red-500 ml-0.5">*</span>{% endif %}
+          </label>
+          <input
+            type="tel"
+            name="{{ field.html_name }}"
+            id="{{ field.id_for_label }}"
+            value="{{ field.value|default_if_none:'' }}"
+            required
+            placeholder="+639XXXXXXXXX"
+            class="block w-full rounded-md border border-gray-300 dark:border-gray-700
+                   bg-gray-50 dark:bg-gray-950 text-gray-900 dark:text-gray-100
+                   px-3 py-2 text-sm shadow-sm placeholder:text-gray-400 dark:placeholder:text-gray-500
+                   focus:border-teal-500 focus:outline-none focus:ring-2 focus:ring-teal-500/40
+                   {% if field.errors %}border-red-500{% endif %}"
+          >
+          <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">Format: +639XXXXXXXXX</p>
+        </div>
+        {% endwith %}
+      </div>
+    </section>
+
+    <section class="rounded-lg border border-slate-300/80 dark:border-slate-700/80 bg-gradient-to-br from-slate-100 via-slate-50 to-slate-200 dark:from-slate-950 dark:via-slate-900 dark:to-slate-800 p-5 shadow-sm ring-1 ring-white/70 dark:ring-white/5">
+      <h2 class="text-sm font-semibold text-gray-900 dark:text-gray-100 uppercase tracking-wide">Professional Details</h2>
+      <div class="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
+        {% with field=form.specialty %}
+        <div>
+          <label for="{{ field.id_for_label }}" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+            {{ field.label }}{% if field.field.required %}<span class="text-red-500 ml-0.5">*</span>{% endif %}
+          </label>
+          <input
+            type="text"
+            name="{{ field.html_name }}"
+            id="{{ field.id_for_label }}"
+            value="{{ field.value|default_if_none:'' }}"
+            required
+            placeholder="e.g., Cardiology"
+            class="block w-full rounded-md border border-gray-300 dark:border-gray-700
+                   bg-gray-50 dark:bg-gray-950 text-gray-900 dark:text-gray-100
+                   px-3 py-2 text-sm shadow-sm placeholder:text-gray-400 dark:placeholder:text-gray-500
+                   focus:border-teal-500 focus:outline-none focus:ring-2 focus:ring-teal-500/40
+                   {% if field.errors %}border-red-500{% endif %}"
+          >
+        </div>
+        {% endwith %}
+
+        {% with field=form.prc_license %}
+        <div>
+          <label for="{{ field.id_for_label }}" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+            {{ field.label }}{% if field.field.required %}<span class="text-red-500 ml-0.5">*</span>{% endif %}
+          </label>
+          <input
+            type="text"
+            name="{{ field.html_name }}"
+            id="{{ field.id_for_label }}"
+            value="{{ field.value|default_if_none:'' }}"
+            required
+            placeholder="PRC-XXXXXXX"
+            class="block w-full rounded-md border border-gray-300 dark:border-gray-700
+                   bg-gray-50 dark:bg-gray-950 text-gray-900 dark:text-gray-100
+                   px-3 py-2 text-sm shadow-sm placeholder:text-gray-400 dark:placeholder:text-gray-500
+                   focus:border-teal-500 focus:outline-none focus:ring-2 focus:ring-teal-500/40
+                   {% if field.errors %}border-red-500{% endif %}"
+          >
+        </div>
+        {% endwith %}
+
+        {% with field=form.clinic_name %}
+        <div class="sm:col-span-2">
+          <label for="{{ field.id_for_label }}" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+            {{ field.label }}{% if field.field.required %}<span class="text-red-500 ml-0.5">*</span>{% endif %}
+          </label>
+          <input
+            type="text"
+            name="{{ field.html_name }}"
+            id="{{ field.id_for_label }}"
+            value="{{ field.value|default_if_none:'' }}"
+            required
+            placeholder="Clinic or hospital name"
+            class="block w-full rounded-md border border-gray-300 dark:border-gray-700
+                   bg-gray-50 dark:bg-gray-950 text-gray-900 dark:text-gray-100
+                   px-3 py-2 text-sm shadow-sm placeholder:text-gray-400 dark:placeholder:text-gray-500
+                   focus:border-teal-500 focus:outline-none focus:ring-2 focus:ring-teal-500/40
+                   {% if field.errors %}border-red-500{% endif %}"
+          >
+        </div>
+        {% endwith %}
+      </div>
+    </section>
+  </div>
+
+  <div class="flex items-center justify-between gap-3 pt-2">
+    <p class="text-xs text-gray-500 dark:text-gray-400">Fields marked with * are required.</p>
+    <button type="submit"
+            class="inline-flex items-center gap-2 rounded-md bg-teal-600 hover:bg-teal-700
+                   px-5 py-2.5 text-sm font-semibold text-white shadow-sm
+                   focus:outline-none focus:ring-2 focus:ring-teal-500 focus:ring-offset-2
+                   transition-colors">
+      Send Invite
+    </button>
+    <a href="{% url 'admin:doctors_doctorprofile_changelist' %}"
+       class="text-sm text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200">
+      Cancel
+    </a>
+  </div>
+
+</form>
+{% endblock %}

@@ -1,0 +1,219 @@
+from django.contrib import admin, messages
+from django.utils.html import format_html
+from django.utils.translation import gettext_lazy as _
+
+from .models import Medicine, Order, PharmacyPrescriptionUpload
+
+
+# ── Medicine Admin ────────────────────────────────────────────────────────────
+
+@admin.register(Medicine)
+class MedicineAdmin(admin.ModelAdmin):
+    list_display  = ("name", "generic_name", "category", "price_display", "stock_badge", "quantity", "requires_prescription")
+    list_filter   = ("category", "in_stock", "requires_prescription")
+    search_fields = ("name", "generic_name")
+    list_per_page = 25
+    fieldsets = (
+        (None, {"fields": ("name", "generic_name", "category", "dosage_form", "manufacturer", "pharmacy_partner")}),
+        ("Pricing & Stock", {"fields": ("price", "quantity", "in_stock")}),
+        ("Prescription", {"fields": ("requires_prescription", "prescription_note")}),
+        ("Media", {"fields": ("image", "description")}),
+    )
+
+    @admin.display(description="Price (PHP)", ordering="price")
+    def price_display(self, obj):
+        return format_html('<span style="font-weight:600;color:#0f172a">₱{}</span>', f"{obj.price:,.2f}")
+
+    @admin.display(description="Stock", ordering="in_stock")
+    def stock_badge(self, obj):
+        if obj.in_stock:
+            return format_html('<span class="badge-status badge-in_stock">✓ In Stock</span>')
+        return format_html('<span class="badge-status badge-out_stock">✗ Out of Stock</span>')
+
+
+# ── Prescription Upload Admin ─────────────────────────────────────────────────
+
+@admin.action(description=_("Approve selected prescriptions"))
+def approve_prescriptions(modeladmin, request, queryset):
+    updated = queryset.update(status="approved")
+    messages.success(request, f"{updated} prescription(s) approved.")
+
+
+@admin.action(description=_("Reject selected prescriptions"))
+def reject_prescriptions(modeladmin, request, queryset):
+    updated = queryset.update(status="rejected")
+    messages.warning(request, f"{updated} prescription(s) rejected.")
+
+
+@admin.register(PharmacyPrescriptionUpload)
+class PharmacyPrescriptionUploadAdmin(admin.ModelAdmin):
+    list_display  = ("id", "patient", "order_ref_link", "status_badge", "file_preview", "created_at")
+    list_filter   = ("status",)
+    search_fields = ("patient__email", "order__order_ref")
+    readonly_fields = ("patient", "order", "file_preview_large", "created_at", "updated_at")
+    fields        = ("patient", "order", "file_preview_large", "status", "notes", "created_at", "updated_at")
+    actions       = [approve_prescriptions, reject_prescriptions]
+    list_per_page = 25
+
+    @admin.display(description="Order")
+    def order_ref_link(self, obj):
+        if obj.order:
+            return format_html(
+                '<a href="/admin/pharmacy/order/{}/change/">{}</a>',
+                obj.order.pk, obj.order.order_ref,
+            )
+        return "—"
+
+    @admin.display(description="Status")
+    def status_badge(self, obj):
+        colors = {"pending": "#f59e0b", "approved": "#10b981", "rejected": "#ef4444"}
+        color = colors.get(obj.status, "#6b7280")
+        return format_html(
+            '<span style="color:{};font-weight:600">{}</span>',
+            color, obj.get_status_display(),
+        )
+
+    @admin.display(description="File")
+    def file_preview(self, obj):
+        if not obj.file:
+            return "—"
+        url = obj.file.url
+        if url.lower().endswith(".pdf"):
+            return format_html('<a href="{}" target="_blank">📄 View PDF</a>', url)
+        return format_html('<a href="{}" target="_blank"><img src="{}" style="height:40px;border-radius:4px"></a>', url, url)
+
+    @admin.display(description="Prescription File")
+    def file_preview_large(self, obj):
+        if not obj.file:
+            return "No file uploaded."
+        url = obj.file.url
+        if url.lower().endswith(".pdf"):
+            return format_html(
+                '<a href="{}" target="_blank" style="font-size:14px">📄 Open PDF in new tab</a>', url
+            )
+        return format_html(
+            '<a href="{}" target="_blank">'
+            '<img src="{}" style="max-width:400px;max-height:300px;border-radius:8px;border:1px solid #e2e8f0">'
+            '</a>', url, url,
+        )
+
+
+# ── Order actions ─────────────────────────────────────────────────────────────
+
+@admin.action(description=_("Mark selected orders as Processing"))
+def mark_processing(modeladmin, request, queryset):
+    queryset.filter(status__in=["pending", "confirmed"]).update(status="processing")
+
+
+@admin.action(description=_("Mark selected orders as Shipped"))
+def mark_shipped(modeladmin, request, queryset):
+    queryset.exclude(status__in=["delivered", "cancelled"]).update(status="shipped")
+
+
+@admin.action(description=_("Mark selected orders as Out for Delivery"))
+def mark_out_for_delivery(modeladmin, request, queryset):
+    queryset.exclude(status__in=["delivered", "cancelled"]).update(
+        status="out_for_delivery"
+    )
+
+
+@admin.action(description=_("Mark selected orders as Delivered"))
+def mark_delivered(modeladmin, request, queryset):
+    queryset.exclude(status="cancelled").update(status="delivered")
+
+
+# ── Order Admin ───────────────────────────────────────────────────────────────
+
+@admin.register(Order)
+class OrderAdmin(admin.ModelAdmin):
+    list_display    = (
+        "order_ref", "patient", "total_display",
+        "status_badge", "tracking_number",
+        "payment_badge", "payment_method", "rx_upload_link", "from_prescription", "created_at",
+    )
+    list_filter     = ("status", "payment_method", "payment_status", "from_prescription")
+    search_fields   = ("order_ref", "patient__email", "paymongo_checkout_id", "tracking_number")
+    ordering        = ("-created_at",)
+    list_per_page   = 25
+    readonly_fields = (
+        "order_ref", "paymongo_checkout_id",
+        "payment_status", "payment_method_type",
+        "prescription_image_preview",
+        "created_at", "updated_at",
+    )
+    fieldsets = (
+        ("Order Info", {
+            "fields": ("patient", "order_ref", "items", "total_amount", "from_prescription"),
+        }),
+        ("Prescription", {
+            "fields": ("prescription", "prescription_image_preview"),
+        }),
+        ("Delivery", {
+            "fields": ("delivery_address", "status", "tracking_number"),
+        }),
+        ("Payment", {
+            "fields": ("payment_method", "paymongo_checkout_id", "payment_status", "payment_method_type"),
+        }),
+        ("Timestamps", {
+            "fields": ("created_at", "updated_at"),
+            "classes": ("collapse",),
+        }),
+    )
+    actions = [mark_processing, mark_shipped, mark_out_for_delivery, mark_delivered]
+
+    @admin.display(description="Total (PHP)", ordering="total_amount")
+    def total_display(self, obj):
+        return format_html('<span style="font-weight:600;color:#0f172a">₱{}</span>', f"{obj.total_amount:,.2f}")
+
+    @admin.display(description="Status", ordering="status")
+    def status_badge(self, obj):
+        mapping = {
+            "pending":          ("badge-pending",     "⏳ Pending"),
+            "confirmed":        ("badge-confirmed",   "✓ Confirmed"),
+            "processing":       ("badge-in_progress", "⚙ Processing"),
+            "shipped":          ("badge-online",      "🚚 Shipped"),
+            "out_for_delivery": ("badge-online",      "🛵 Out for Delivery"),
+            "delivered":        ("badge-completed",   "✔ Delivered"),
+            "cancelled":        ("badge-cancelled",   "✗ Cancelled"),
+        }
+        css, label = mapping.get(obj.status, ("badge-inactive", obj.status))
+        return format_html('<span class="badge-status {}">{}</span>', css, label)
+
+    @admin.display(description="Payment", ordering="payment_status")
+    def payment_badge(self, obj):
+        if obj.payment_status == "paid":
+            return format_html('<span class="badge-status badge-paid">✓ Paid</span>')
+        if obj.payment_status == "pending":
+            return format_html('<span class="badge-status badge-pending">⏳ Pending</span>')
+        return format_html('<span class="badge-status badge-cancelled">✗ {}</span>', obj.payment_status.title())
+
+    @admin.display(description="Rx Upload")
+    def rx_upload_link(self, obj):
+        try:
+            upload = obj.prescription_upload
+            return format_html(
+                '<a href="/admin/pharmacy/pharmacyprescriptionupload/{}/change/">'
+                '<span style="color:{};font-weight:600">{}</span></a>',
+                upload.pk,
+                {"pending": "#f59e0b", "approved": "#10b981", "rejected": "#ef4444"}.get(upload.status, "#6b7280"),
+                upload.get_status_display(),
+            )
+        except PharmacyPrescriptionUpload.DoesNotExist:
+            return "—"
+
+    @admin.display(description="Uploaded Prescription")
+    def prescription_image_preview(self, obj):
+        try:
+            upload = obj.prescription_upload
+            if not upload.file:
+                return "No file."
+            url = upload.file.url
+            if url.lower().endswith(".pdf"):
+                return format_html('<a href="{}" target="_blank">📄 Open PDF</a>', url)
+            return format_html(
+                '<a href="{}" target="_blank">'
+                '<img src="{}" style="max-width:350px;max-height:250px;border-radius:6px;border:1px solid #e2e8f0">'
+                '</a>', url, url,
+            )
+        except PharmacyPrescriptionUpload.DoesNotExist:
+            return "No prescription uploaded."

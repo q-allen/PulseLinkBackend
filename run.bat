@@ -1,0 +1,3 @@
+@echo off
+echo Starting CareConnect backend on 0.0.0.0:8000...
+python manage.py runserver 0.0.0.0:8000

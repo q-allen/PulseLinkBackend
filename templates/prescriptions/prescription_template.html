@@ -1,0 +1,335 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>CareConnect E-Prescription</title>
+  <style>
+    @page {
+      size: A4;
+      margin: 18mm 18mm 20mm 18mm;
+    }
+    * { box-sizing: border-box; }
+    body {
+      font-family: "Helvetica", "Arial", sans-serif;
+      color: #111827;
+      font-size: 12px;
+      line-height: 1.4;
+    }
+    .muted { color: #6b7280; }
+    .brand { color: #0f766e; font-weight: 700; letter-spacing: 0.6px; }
+    .header {
+      display: flex;
+      justify-content: space-between;
+      gap: 12px;
+      border-bottom: 2px solid #0f766e;
+      padding-bottom: 10px;
+      margin-bottom: 12px;
+    }
+    .header .clinic {
+      max-width: 65%;
+    }
+    .header h1 {
+      font-size: 16px;
+      margin: 0;
+    }
+    .rx-meta {
+      text-align: right;
+      font-size: 11px;
+    }
+    .rx-meta .rx-number {
+      font-size: 14px;
+      font-weight: 700;
+      color: #0f766e;
+      letter-spacing: 0.5px;
+    }
+    .section {
+      margin-top: 12px;
+    }
+    .section-title {
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: #0f766e;
+      font-weight: 700;
+      margin-bottom: 6px;
+    }
+    .patient-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px 16px;
+      padding: 10px 12px;
+      border: 1px solid #e5e7eb;
+      border-radius: 8px;
+      background: #f9fafb;
+    }
+    .patient-grid .label {
+      font-size: 10px;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: #6b7280;
+      margin-bottom: 2px;
+    }
+    .patient-grid .value {
+      font-weight: 600;
+      font-size: 12px;
+    }
+    .rx-block {
+      display: flex;
+      gap: 12px;
+      align-items: flex-start;
+    }
+    .rx-symbol {
+      font-family: "Times New Roman", serif;
+      font-size: 36px;
+      font-weight: 700;
+      color: #0f766e;
+      line-height: 1;
+      margin-top: 2px;
+    }
+    .rx-table {
+      width: 100%;
+      border-collapse: collapse;
+      border: 1px solid #e5e7eb;
+      border-radius: 8px;
+      overflow: hidden;
+    }
+    .rx-table th {
+      background: #f0fdfa;
+      color: #115e59;
+      font-size: 10px;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      text-align: left;
+      padding: 8px;
+      border-bottom: 1px solid #e5e7eb;
+    }
+    .rx-table td {
+      padding: 8px;
+      border-bottom: 1px solid #eef2f7;
+      vertical-align: top;
+    }
+    .rx-table tr:last-child td {
+      border-bottom: none;
+    }
+    .med-name {
+      font-weight: 700;
+      font-size: 12px;
+    }
+    .med-sub {
+      font-size: 10px;
+      color: #6b7280;
+      margin-top: 2px;
+    }
+    .sig-line {
+      font-size: 11px;
+      color: #111827;
+    }
+    .qty-box {
+      display: inline-block;
+      min-width: 36px;
+      text-align: center;
+      padding: 4px 6px;
+      border: 1px dashed #9ca3af;
+      border-radius: 6px;
+      font-weight: 700;
+    }
+    .notes-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px 18px;
+    }
+    .note-card {
+      border: 1px solid #e5e7eb;
+      border-radius: 8px;
+      padding: 10px 12px;
+      background: #ffffff;
+    }
+    .note-card p {
+      margin: 0;
+      font-size: 12px;
+    }
+    .signature-row {
+      display: flex;
+      justify-content: space-between;
+      gap: 16px;
+      margin-top: 14px;
+      align-items: flex-end;
+    }
+    .signature {
+      flex: 1;
+      border-top: 1px solid #111827;
+      padding-top: 6px;
+    }
+    .signature .doctor-name {
+      font-weight: 700;
+      margin-bottom: 2px;
+    }
+    .signature .doctor-cred {
+      font-size: 10px;
+      color: #6b7280;
+    }
+    .qr-box {
+      width: 94px;
+      height: 94px;
+      border: 2px dashed #9ca3af;
+      border-radius: 10px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 9px;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      color: #6b7280;
+      background: #f8fafc;
+    }
+    .footer-note {
+      margin-top: 10px;
+      font-size: 9.5px;
+      color: #6b7280;
+      text-align: center;
+    }
+    .clinic-address { font-size: 10px; margin-top: 2px; }
+    .col-num { width: 5%; }
+    .col-med { width: 45%; }
+    .col-sig { width: 35%; }
+    .col-qty { width: 15%; }
+    .note-card .section-title { margin-bottom: 4px; }
+    .qr-label { font-size: 9px; margin-top: 4px; text-align: center; }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <div class="clinic">
+      <div class="brand">CareConnect · E-Prescription</div>
+      <h1>{{ doctor_name }}</h1>
+      <div class="muted">
+        {{ doctor_specialty }}
+        {% if clinic_name %} · {{ clinic_name }}{% endif %}
+      </div>
+      <div class="muted clinic-address">
+        {% if clinic_address %}{{ clinic_address }}{% endif %}
+        {% if clinic_city %}{% if clinic_address %}, {% endif %}{{ clinic_city }}{% endif %}
+      </div>
+    </div>
+    <div class="rx-meta">
+      <div class="muted">Prescription No.</div>
+      <div class="rx-number">RX-{{ rx.pk|stringformat:"06d" }}</div>
+      <div class="muted">Date Issued</div>
+      <div>{{ rx.date|date:"F d, Y" }}</div>
+    </div>
+  </div>
+
+  <div class="section">
+    <div class="section-title">Patient Information</div>
+    <div class="patient-grid">
+      <div>
+        <div class="label">Patient Name</div>
+        <div class="value">{{ patient_name }}</div>
+      </div>
+      <div>
+        <div class="label">Age / Sex</div>
+        <div class="value">{{ patient_age }}{% if patient_age and patient_sex %} / {% endif %}{{ patient_sex }}</div>
+      </div>
+      <div>
+        <div class="label">Address</div>
+        <div class="value">{{ patient_address }}</div>
+      </div>
+      <div>
+        <div class="label">Consultation</div>
+        <div class="value">
+          {% if appointment_date %}{{ appointment_date }}{% else %}—{% endif %}
+          {% if appointment_time %} · {{ appointment_time }}{% endif %}
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="section">
+    <div class="section-title">Prescription</div>
+    <div class="rx-block">
+      <div class="rx-symbol">℞</div>
+      <table class="rx-table">
+        <thead>
+          <tr>
+            <th class="col-num">#</th>
+            <th class="col-med">Medicine</th>
+            <th class="col-sig">Sig (Directions)</th>
+            <th class="col-qty">Qty</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for med in medications %}
+            <tr>
+              <td>{{ forloop.counter }}</td>
+              <td>
+                <div class="med-name">{{ med.display_name }}</div>
+                <div class="med-sub">
+                  {% if med.generic_name %}Generic: {{ med.generic_name }} · {% endif %}
+                  {% if med.form %}{{ med.form }}{% endif %}
+                  {% if med.route %}{% if med.form %} · {% endif %}{{ med.route }}{% endif %}
+                </div>
+              </td>
+              <td>
+                <div class="sig-line">{{ med.sig_line }}</div>
+                {% if med.duration %}<div class="med-sub">Duration: {{ med.duration }}</div>{% endif %}
+              </td>
+              <td>
+                <span class="qty-box">{{ med.quantity }}</span>
+                {% if med.refills %}<div class="med-sub">Refills: {{ med.refills }}</div>{% endif %}
+              </td>
+            </tr>
+          {% empty %}
+            <tr>
+              <td colspan="4" class="muted">No medications listed.</td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="section notes-grid">
+    <div class="note-card">
+      <div class="section-title">Diagnosis</div>
+      <p>{{ rx.diagnosis }}</p>
+    </div>
+    <div class="note-card">
+      <div class="section-title">Follow-Up Date</div>
+      <p>{{ follow_up_date|default:"—" }}</p>
+    </div>
+    <div class="note-card">
+      <div class="section-title">Remarks</div>
+      <p>{{ remarks|default:"—" }}</p>
+    </div>
+    <div class="note-card">
+      <div class="section-title">Valid Until</div>
+      <p>{{ rx.valid_until|date:"F d, Y" }}</p>
+    </div>
+  </div>
+
+  <div class="signature-row">
+    <div class="signature">
+      <div class="doctor-name">{{ doctor_name }}</div>
+      <div class="doctor-cred">
+        {% if doctor_prc %}PRC: {{ doctor_prc }} · {% endif %}
+        {% if doctor_ptr %}PTR: {{ doctor_ptr }} · {% endif %}
+        {% if doctor_s2 %}S2: {{ doctor_s2 }}{% endif %}
+      </div>
+      <div class="doctor-cred">
+        {% if doctor_license_note %}{{ doctor_license_note }}{% else %}Digitally signed prescription issued via CareConnect.{% endif %}
+      </div>
+    </div>
+    <div>
+      <div class="qr-box">QR CODE</div>
+      <div class="muted qr-label">
+        Scan to verify
+      </div>
+    </div>
+  </div>
+
+  <div class="footer-note">
+    This electronic prescription is valid when verified by the prescribing physician.
+  </div>
+</body>
+</html>

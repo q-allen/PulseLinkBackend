@@ -1,0 +1,10 @@
+{% extends 'admin/base.html' %}
+{% load i18n jazzmin %}
+
+{% block footer %}
+{% if not is_popup %}
+<footer class="app-footer">
+  <span style="color:#94a3b8;font-size:0.78rem;">CareConnect &copy; {% now "Y" %}</span>
+</footer>
+{% endif %}
+{% endblock %}
