@@ -179,17 +179,12 @@ else:
 
 # ── Database ──────────────────────────────────────────────────────────────────
 DATABASES = {
-    "default": {
-        "ENGINE": "django.db.backends.postgresql",
-        "NAME": os.environ.get("DB_NAME"),
-        "USER": os.environ.get("DB_USER"),
-        "PASSWORD": os.environ.get("DB_PASSWORD"),
-        "HOST": os.environ.get("DB_HOST", "localhost"),
-        "PORT": os.environ.get("DB_PORT", "5432"),
-    }
+    "default": dj_database_url.parse(
+        os.environ.get("DATABASE_URL"),
+        conn_max_age=600,
+        ssl_require=not DEBUG
+    )
 }
-
-DATABASES["default"] = dj_database_url.parse(os.environ.get("DATABASE_URL"), conn_max_age=600, ssl_require=not DEBUG) if os.environ.get("DATABASE_URL") else DATABASES["default"]
 
 # ── Cache (Redis optional, with local-memory fallback) ────────────────────────
 # Reuses the same _REDIS_URL / _USE_REDIS resolved above for Channel Layers.
@@ -479,7 +474,7 @@ JAZZMIN_UI_TWEAKS = {
     "sidebar_nav_legacy_style": False,
     "sidebar_nav_flat_style":  False,
     "theme":                   "default",
-    "dark_mode_theme":         None,
+    "dark_mode_theme":         "auto",
     "button_classes": {
         "primary":   "btn-primary",
         "secondary": "btn-secondary",
