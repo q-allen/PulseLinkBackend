@@ -149,6 +149,9 @@ def get_effective_slots_for_date(profile, target_date: date_type) -> List[dict]:
         ).exclude(status__in=["cancelled", "no_show"]).values_list("time", flat=True)
     }
 
+    # For today, exclude slots whose time has already passed
+    now_time = timezone.localtime().time() if target_date == timezone.localdate() else None
+
     explicit_qs = DoctorAvailableSlot.objects.filter(
         doctor=profile, date=target_date
     ).order_by("start_time")
@@ -163,6 +166,8 @@ def get_effective_slots_for_date(profile, target_date: date_type) -> List[dict]:
         day_consult_types = day_config.get("consultation_types", "both")
 
         for slot in explicit_qs:
+            if now_time and slot.start_time <= now_time:
+                continue
             slot_time_str = slot.start_time.strftime("%H:%M")
             is_booked     = slot_time_str in booked_strs
             result.append({
@@ -177,6 +182,8 @@ def get_effective_slots_for_date(profile, target_date: date_type) -> List[dict]:
 
     # Fall back to weekly_schedule auto-generation
     for start_t, end_t, consult_types in generate_slots_from_weekly_schedule(profile, target_date):
+        if now_time and start_t <= now_time:
+            continue
         slot_time_str = start_t.strftime("%H:%M")
         is_booked     = slot_time_str in booked_strs
         result.append({

@@ -167,8 +167,7 @@ class AppointmentCreateSerializer(serializers.Serializer):
 
     def validate_date(self, value):
         today = timezone.localdate()
-        yesterday = today - timedelta(days=1)
-        if value < yesterday:
+        if value < today:
             raise serializers.ValidationError(
                 "Cannot book appointments in the past. Please select today or a future date."
             )
@@ -200,6 +199,12 @@ class AppointmentCreateSerializer(serializers.Serializer):
         if not attrs.get("time"):
             raise serializers.ValidationError({
                 "time": "Please select an appointment time."
+            })
+
+        # Block booking a past time slot on today's date
+        if attrs["date"] == timezone.localdate() and attrs["time"] <= timezone.localtime().time():
+            raise serializers.ValidationError({
+                "time": "This time slot has already passed. Please select a future time slot."
             })
 
         # In-clinic: validate clinic info exists

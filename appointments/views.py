@@ -1410,11 +1410,15 @@ class AppointmentViewSet(viewsets.ViewSet):
 
         refund_issued = False
         refund_error  = None
+        needs_manual_refund = False
 
         if apt.payment_status == "paid" and apt.paymongo_payment_id:
             refund_issued, refund_error = _issue_paymongo_refund(
                 apt.paymongo_payment_id, apt.effective_fee or apt.fee
             )
+            # If refund failed due to insufficient payout balance, flag for manual processing
+            if not refund_issued and refund_error:
+                needs_manual_refund = True
 
         with transaction.atomic():
             apt.status        = "cancelled"
@@ -1423,6 +1427,8 @@ class AppointmentViewSet(viewsets.ViewSet):
             if refund_issued:
                 apt.payment_status = "refunded"
                 apt.refunded_at    = timezone.now()
+            # If refund failed but payment was made, keep payment_status="paid"
+            # so admin/doctor can retry the refund later
             apt.save(update_fields=[
                 "status", "cancelled_by", "cancel_reason",
                 "payment_status", "refunded_at", "updated_at",
@@ -1443,29 +1449,42 @@ class AppointmentViewSet(viewsets.ViewSet):
         if patient_gender:
             patient_info += f", {patient_gender.capitalize()}"
 
-        # Notify patient with clear refund timeline
-        refund_timeline = (
-            "Your payment has been refunded to your original payment method. "
-            "GCash/Maya: typically instant. Credit/Debit cards: 3–7 business days."
-            if refund_issued else
-            (refund_error if refund_error else "No refund applicable (not paid online).")
-        )
+        fee_display = f"₱{float(apt.effective_fee or apt.fee or 0):,.2f}"
+
+        if refund_issued:
+            refund_timeline = (
+                "Your payment has been refunded to your original payment method. "
+                "GCash/Maya: typically instant. Credit/Debit cards: 3–7 business days."
+            )
+        elif needs_manual_refund:
+            refund_timeline = (
+                f"Your appointment has been cancelled. Your payment of {fee_display} could not be "
+                f"automatically refunded at this time. The doctor has been notified and will "
+                f"process your refund manually. Please contact your doctor if you don't receive "
+                f"your refund within 3–5 business days."
+            )
+        else:
+            refund_timeline = "No refund applicable (not paid online)."
+
         _notify(
             apt.patient,
-            title="Appointment Cancelled & Refunded" if refund_issued else "Appointment Cancelled",
+            title="Appointment Cancelled & Refunded" if refund_issued else "Appointment Cancelled — Refund Pending" if needs_manual_refund else "Appointment Cancelled",
             message=(
                 f"{doctor_name} has cancelled the appointment for {patient_info} on {apt.date}."
-                + (f" {refund_timeline}" if refund_issued or refund_error else "")
+                + f" {refund_timeline}"
                 + (f" Reason: {reason}" if reason else "")
             ),
-            data={"appointment_id": apt.pk, "refund_issued": refund_issued},
+            data={"appointment_id": apt.pk, "refund_issued": refund_issued, "needs_manual_refund": needs_manual_refund},
         )
         _notify(
             apt.doctor,
-            title="Refund Processed" if refund_issued else "Appointment Cancelled",
-            message=f"You cancelled {patient_info}'s appointment on {apt.date}."
-                    + (" Refund issued to patient." if refund_issued else ""),
-            data={"appointment_id": apt.pk},
+            title="Refund Processed" if refund_issued else "⚠️ Manual Refund Required" if needs_manual_refund else "Appointment Cancelled",
+            message=(
+                f"You cancelled {patient_info}'s appointment on {apt.date}."
+                + (" Refund issued to patient." if refund_issued else
+                   f" IMPORTANT: Automatic refund of {fee_display} failed ({refund_error}). Please manually refund the patient via your PayMongo dashboard." if needs_manual_refund else "")
+            ),
+            data={"appointment_id": apt.pk, "needs_manual_refund": needs_manual_refund, "refund_error": refund_error or ""},
         )
 
         # Celery task for email notifications
@@ -1479,10 +1498,30 @@ class AppointmentViewSet(viewsets.ViewSet):
         except Exception as exc:
             logger.warning("Refund notification task failed: %s", exc)
 
+        # Broadcast real-time update so patient's page refreshes without manual reload
+        try:
+            from channels.layers import get_channel_layer
+            from asgiref.sync import async_to_sync
+            channel_layer = get_channel_layer()
+            async_to_sync(channel_layer.group_send)(
+                f"appointment_{apt.pk}",
+                {
+                    "type":                 "status.changed",
+                    "appointment_id":       apt.pk,
+                    "status":               "cancelled",
+                    "payment_status":       apt.payment_status,
+                    "refund_issued":        refund_issued,
+                    "needs_manual_refund":  needs_manual_refund,
+                },
+            )
+        except Exception as exc:
+            logger.warning("Refund WS broadcast failed: %s", exc)
+
         return Response({
             **AppointmentDetailSerializer(apt).data,
-            "refund_issued": refund_issued,
-            "refund_note": refund_timeline,
+            "refund_issued":       refund_issued,
+            "refund_note":         refund_timeline,
+            "needs_manual_refund": needs_manual_refund,
         })
 
     # SUBMIT REVIEW (patient only — completed appointments, one per appointment)
