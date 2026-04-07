@@ -296,77 +296,11 @@ class PrescriptionListView(APIView):
             except Exception as exc:
                 logger.warning("AppointmentShare creation failed for Rx #%s: %s", rx.pk, exc)
 
-        doctor_name = f"Dr. {request.user.first_name} {request.user.last_name}".strip()
-        notif_message = f"{doctor_name} issued you a prescription."
-        notif_data = {"prescription_id": rx.pk, "pdf_url": pdf_url}
-
-        # In-app + WebSocket push
-        try:
-            from notifications.tasks import _notify
-            _notify(patient, title="New Prescription", message=notif_message,
-                    notif_type="prescription", data=notif_data)
-        except Exception as exc:
-            logger.warning("Prescription notify failed for Rx #%s: %s", rx.pk, exc)
-            Notification.objects.create(
-                user=patient, type="prescription", title="New Prescription",
-                message=notif_message, data=notif_data,
-            )
-
-        # Email notification
-        try:
-            from django.core.mail import send_mail
-            from django.conf import settings as django_settings
-            pdf_line = f"\n\nView/download your prescription: {pdf_url}" if pdf_url else ""
-            send_mail(
-                subject=f"New Prescription from {doctor_name}",
-                message=(
-                    f"Hi {patient.first_name},\n\n"
-                    f"{doctor_name} has issued you a prescription.\n"
-                    f"Diagnosis: {rx.diagnosis}{pdf_line}\n\n"
-                    f"— The CareConnect Team"
-                ),
-                from_email=django_settings.DEFAULT_FROM_EMAIL,
-                recipient_list=[patient.email],
-                fail_silently=True,
-            )
-        except Exception as exc:
-            logger.warning("Prescription email failed for Rx #%s: %s", rx.pk, exc)
-
-        # Chat message in existing conversation (if any)
-        try:
-            from chat.models import Conversation, Message
-            from asgiref.sync import async_to_sync
-            from channels.layers import get_channel_layer
-            from chat.serializers import MessageSerializer
-            import json as _json
-
-            conv = Conversation.objects.filter(
-                patient=patient, doctor=request.user
-            ).first()
-            if conv:
-                chat_content = (
-                    f"📋 I have issued you a new prescription.\n"
-                    f"Diagnosis: {rx.diagnosis}"
-                    + (f"\n\nView PDF: {pdf_url}" if pdf_url else "")
-                )
-                chat_msg = Message.objects.create(
-                    conversation=conv,
-                    sender=request.user,
-                    content=chat_content,
-                    type="prescription",
-                )
-                Conversation.objects.filter(pk=conv.pk).update(updated_at=chat_msg.timestamp)
-                serialized = MessageSerializer(chat_msg, context={"request": request}).data
-                safe_data = _json.loads(_json.dumps(serialized, default=str))
-                layer = get_channel_layer()
-                if layer:
-                    async_to_sync(layer.group_send)(
-                        f"chat_{conv.pk}",
-                        {"type": "broadcast_message", "message": safe_data},
-                    )
-        except Exception as exc:
-            logger.warning("Prescription chat message failed for Rx #%s: %s", rx.pk, exc)
-
+        Notification.objects.create(
+            user=patient, type="prescription", title="New Prescription",
+            message=f"Dr. {request.user.first_name} {request.user.last_name} issued you a prescription.",
+            data={"prescription_id": rx.pk, "pdf_url": pdf_url},
+        )
         return Response(PrescriptionSerializer(rx, context={"request": request}).data, status=status.HTTP_201_CREATED)
 
 
