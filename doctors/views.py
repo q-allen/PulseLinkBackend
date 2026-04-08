@@ -652,7 +652,9 @@ class MyScheduleView(APIView):
 class DoctorEarningsView(APIView):
     """
     GET /doctors/earnings/
-    Returns consult counts and estimated revenue for today and the last 7 days.
+
+    Doctor dashboard: net earnings, commission deducted, payout status.
+    Delegates to the payouts app for the full breakdown.
     """
     permission_classes = [IsAuthenticated]
 
@@ -661,41 +663,81 @@ class DoctorEarningsView(APIView):
         if not profile:
             return Response({"detail": "Doctor profile not found."}, status=status.HTTP_404_NOT_FOUND)
 
+        from decimal import Decimal
+        from django.db.models import Sum
         from appointments.models import Appointment
+        from payouts.models import Payout
 
-        today = timezone.localdate()
-        start_week = today - timedelta(days=6)
+        today      = timezone.localdate()
+        week_start = today - timedelta(days=6)
 
-        qs = Appointment.objects.filter(
-            doctor=request.user,
-            status="completed",
-            date__gte=start_week,
-            date__lte=today,
+        # ── All-time completed + paid online appointments ──────────────────────
+        qs_all = (
+            Appointment.objects
+            .filter(
+                doctor=request.user,
+                status="completed",
+                payment_status="paid",
+                type__in=("online", "on_demand"),
+            )
+            .exclude(doctor_earnings=None)
         )
 
-        def _fee(apt):
-            return apt.effective_fee if apt.effective_fee is not None else (apt.fee or 0)
-
-        consults_week = qs.count()
-        consults_today = qs.filter(date=today).count()
-        revenue_week = sum(_fee(a) for a in qs)
-        revenue_today = sum(_fee(a) for a in qs.filter(date=today))
-
-        pending_qs = Appointment.objects.filter(
-            doctor=request.user,
-            status="completed",
-            payment_status__in=["pending", "awaiting"],
+        agg = qs_all.aggregate(
+            total_gross=Sum("fee"),
+            total_commission=Sum("platform_commission"),
+            total_earnings=Sum("doctor_earnings"),
         )
-        pending_payouts = pending_qs.count()
-        pending_amount = sum(_fee(a) for a in pending_qs)
+        total_earnings   = agg["total_earnings"]   or Decimal("0.00")
+        total_commission = agg["total_commission"] or Decimal("0.00")
+        total_gross      = agg["total_gross"]      or Decimal("0.00")
+
+        # ── Payout status ─────────────────────────────────────────────────────
+        paid_out = (
+            Payout.objects
+            .filter(doctor=request.user, status__in=("approved", "paid"))
+            .aggregate(total=Sum("amount"))["total"]
+        ) or Decimal("0.00")
+
+        pending_payout = (
+            Payout.objects
+            .filter(doctor=request.user, status="pending")
+            .aggregate(total=Sum("amount"))["total"]
+        ) or Decimal("0.00")
+
+        available_earnings = max(Decimal("0.00"), total_earnings - paid_out - pending_payout)
+
+        # ── This week ─────────────────────────────────────────────────────────
+        qs_week = qs_all.filter(date__gte=week_start, date__lte=today)
+        agg_week = qs_week.aggregate(
+            earnings=Sum("doctor_earnings"),
+            commission=Sum("platform_commission"),
+        )
+
+        # ── Today ─────────────────────────────────────────────────────────────
+        qs_today = qs_all.filter(date=today)
+        agg_today = qs_today.aggregate(
+            earnings=Sum("doctor_earnings"),
+            commission=Sum("platform_commission"),
+        )
 
         return Response({
-            "consults_today": consults_today,
-            "consults_week": consults_week,
-            "revenue_today": float(revenue_today),
-            "revenue_week": float(revenue_week),
-            "pending_payouts": pending_payouts,
-            "pending_amount": float(pending_amount),
+            # All-time
+            "total_gross":        total_gross,
+            "total_commission":   total_commission,
+            "total_earnings":     total_earnings,
+            "available_earnings": available_earnings,
+            "paid_out":           paid_out,
+            "pending_payout":     pending_payout,
+            "commission_rate":    profile.commission_rate,
+            # This week
+            "week_earnings":      agg_week["earnings"]   or Decimal("0.00"),
+            "week_commission":    agg_week["commission"] or Decimal("0.00"),
+            "week_consults":      qs_week.count(),
+            # Today
+            "today_earnings":     agg_today["earnings"]   or Decimal("0.00"),
+            "today_commission":   agg_today["commission"] or Decimal("0.00"),
+            "today_consults":     qs_today.count(),
         })
 
 

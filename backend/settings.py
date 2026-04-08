@@ -38,6 +38,7 @@ INSTALLED_APPS = [
     "chat",
     "pharmacy",
     "notifications",
+    "payouts",
     "cloudinary_storage",
     "cloudinary",
 ]
@@ -322,6 +323,10 @@ CELERY_BEAT_SCHEDULE = {
     "appointment-no-show-auto-every-5min": {
         "task": "notifications.tasks.auto_mark_no_shows",
         "schedule": 300,  # every 5 minutes
+    },
+    "weekly-payout-reminder-monday-9am": {
+        "task": "payouts.tasks.send_weekly_payout_reminders",
+        "schedule": 604800,  # every 7 days (pair with crontab in production)
     },
 }
 

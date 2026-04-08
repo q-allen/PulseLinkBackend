@@ -1134,8 +1134,14 @@ class AppointmentViewSet(viewsets.ViewSet):
         NowServing pattern: Doctor clicks "End Consultation" →
         - Saves duration, notes, summary, transcript stub
         - Marks appointment completed
+        - Calculates 15% platform commission (online/on_demand + paid only)
         - Broadcasts consultation.ended via Channels so patient UI closes the room
         - Notifies patient they can now leave a review
+
+        Commission formula (online/on_demand, payment_status=paid):
+            platform_commission = fee * (commission_rate / 100)   [default 15%]
+            doctor_earnings     = fee - platform_commission
+        In-clinic → commission = 0, doctor keeps full fee (fields stay None).
         """
         apt = self._get_appointment(pk, request.user)
         if not apt:
@@ -1151,46 +1157,72 @@ class AppointmentViewSet(viewsets.ViewSet):
         participants     = request.data.get("participants")
         duration_seconds = request.data.get("duration_seconds")
 
-        apt.status         = "completed"
-        apt.video_ended_at = timezone.now()
+        with transaction.atomic():
+            apt.status         = "completed"
+            apt.video_ended_at = timezone.now()
 
-        # Back-calculate video_started_at if not already set (e.g. on-demand)
-        if duration_seconds and not apt.video_started_at:
+            # Back-calculate video_started_at if not already set (e.g. on-demand)
+            if duration_seconds and not apt.video_started_at:
+                try:
+                    apt.video_started_at = apt.video_ended_at - timedelta(seconds=int(duration_seconds))
+                except (TypeError, ValueError):
+                    pass
+
+            if isinstance(participants, list):
+                apt.video_participants = participants
+            if transcript:
+                apt.consult_transcript = transcript
+            if consult_notes:
+                apt.consult_notes = consult_notes
+            if consult_summary:
+                apt.consult_summary = consult_summary
+
+            # ── 15% Commission Calculation ────────────────────────────────────
+            # Only applies when:
+            #   1. Appointment type is online or on_demand (not in_clinic)
+            #   2. Payment has been confirmed (payment_status == "paid")
+            #   3. A fee is recorded on the appointment
+            from decimal import Decimal
+            is_online = apt.type in ("online", "on_demand")
+            is_paid   = apt.payment_status == "paid"
+            fee       = apt.fee  # gross fee charged to patient
+
+            if is_online and is_paid and fee:
+                try:
+                    commission_rate = apt.doctor.doctor_profile.commission_rate
+                except Exception:
+                    commission_rate = Decimal("15.00")  # safe fallback
+
+                # platform_commission = fee × (rate / 100)
+                apt.platform_commission = round(fee * (commission_rate / Decimal("100")), 2)
+                # doctor_earnings = fee - platform_commission
+                apt.doctor_earnings = round(fee - apt.platform_commission, 2)
+            # in_clinic or unpaid → no commission, fields stay None
+
+            update_fields = [
+                "status", "consult_transcript", "video_started_at",
+                "video_ended_at", "video_participants",
+                "consult_notes", "consult_summary",
+                "doctor_earnings", "platform_commission",
+                "updated_at",
+            ]
+            apt.save(update_fields=update_fields)
+
+            # Persist transcript in records app for longitudinal patient history
             try:
-                apt.video_started_at = apt.video_ended_at - timedelta(seconds=int(duration_seconds))
-            except (TypeError, ValueError):
-                pass
-
-        if isinstance(participants, list):
-            apt.video_participants = participants
-        if transcript:
-            apt.consult_transcript = transcript
-        if consult_notes:
-            apt.consult_notes = consult_notes
-        if consult_summary:
-            apt.consult_summary = consult_summary
-
-        apt.save(update_fields=[
-            "status", "consult_transcript", "video_started_at",
-            "video_ended_at", "video_participants",
-            "consult_notes", "consult_summary", "updated_at",
-        ])
-
-        # Persist transcript in records app for longitudinal patient history
-        try:
-            from records.models import ConsultTranscript
-            ConsultTranscript.objects.update_or_create(
-                appointment=apt,
-                defaults={
-                    "patient":          apt.patient,
-                    "doctor":           apt.doctor,
-                    "notes":            consult_notes or transcript,
-                    "summary":          consult_summary,
-                    "duration_seconds": apt.video_duration_seconds or 0,
-                },
-            )
-        except Exception as exc:
-            logger.warning("ConsultTranscript save failed: %s", exc)
+                from records.models import ConsultTranscript
+                ConsultTranscript.objects.update_or_create(
+                    appointment=apt,
+                    defaults={
+                        "patient":          apt.patient,
+                        "doctor":           apt.doctor,
+                        "notes":            consult_notes or transcript,
+                        "summary":          consult_summary,
+                        "duration_seconds": apt.video_duration_seconds or 0,
+                    },
+                )
+            except Exception as exc:
+                logger.warning("ConsultTranscript save failed: %s", exc)
 
         duration_min = round((apt.video_duration_seconds or 0) / 60, 1)
 
@@ -1204,6 +1236,20 @@ class AppointmentViewSet(viewsets.ViewSet):
             ),
             data={"appointment_id": apt.pk},
         )
+
+        # Notify doctor of their net earnings (online only)
+        if apt.doctor_earnings is not None:
+            _notify(
+                apt.doctor,
+                title="Consultation Earnings 💰",
+                message=(
+                    f"Consultation #{apt.pk} completed. "
+                    f"Gross: ₱{apt.fee:,.2f} | "
+                    f"Commission (15%): ₱{apt.platform_commission:,.2f} | "
+                    f"Your earnings: ₱{apt.doctor_earnings:,.2f}"
+                ),
+                data={"appointment_id": apt.pk},
+            )
 
         # Broadcast two events:
         # 1. consultation.ended  — patient Jitsi iframe closes gracefully
@@ -1906,6 +1952,108 @@ def _verify_apt_webhook_sig(raw_body: bytes, signature_header: str) -> bool:
     message  = f"{timestamp}.{raw_body.decode('utf-8')}"
     expected = _hmac.new(secret.encode(), message.encode(), hashlib.sha256).hexdigest()
     return _hmac.compare_digest(expected, received_hmac)
+
+
+# ── Doctor Earnings Dashboard ─────────────────────────────────────────────────
+
+class DoctorEarningsSummaryView(APIView):
+    """
+    GET /appointments/earnings/summary/
+    Doctor dashboard: total net earnings, commission deducted, per-appointment breakdown.
+    """
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        if not (_is_doctor(request.user) or _is_admin(request.user)):
+            return Response({"detail": "Doctors only."}, status=status.HTTP_403_FORBIDDEN)
+
+        from decimal import Decimal
+        from django.db.models import Sum
+
+        doctor_id = request.query_params.get("doctor_id") if _is_admin(request.user) else request.user.pk
+
+        qs = (
+            Appointment.objects
+            .filter(doctor_id=doctor_id, status="completed", payment_status="paid")
+            .exclude(doctor_earnings=None)
+            .order_by("-date")
+        )
+
+        agg = qs.aggregate(
+            total_earnings=Sum("doctor_earnings"),
+            total_commission=Sum("platform_commission"),
+            total_gross=Sum("fee"),
+        )
+
+        breakdown = list(
+            qs.values(
+                "id", "date", "type", "fee",
+                "doctor_earnings", "platform_commission",
+            )
+        )
+
+        return Response({
+            "total_earnings":   agg["total_earnings"]   or Decimal("0.00"),
+            "total_commission": agg["total_commission"] or Decimal("0.00"),
+            "total_gross":      agg["total_gross"]      or Decimal("0.00"),
+            "completed_count":  qs.count(),
+            "breakdown":        breakdown,
+        })
+
+
+# ── Admin Revenue Dashboard ───────────────────────────────────────────────────
+
+class AdminRevenueSummaryView(APIView):
+    """
+    GET /appointments/admin/revenue/
+    Admin dashboard: daily/weekly/monthly platform commission collected.
+    Query params: period=daily|weekly|monthly (default: monthly)
+    """
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        if not _is_admin(request.user):
+            return Response({"detail": "Admins only."}, status=status.HTTP_403_FORBIDDEN)
+
+        from decimal import Decimal
+        from django.db.models import Sum, Count
+        from django.db.models.functions import TruncDay, TruncWeek, TruncMonth
+
+        period = request.query_params.get("period", "monthly")
+        trunc_fn = {"daily": TruncDay, "weekly": TruncWeek, "monthly": TruncMonth}.get(period, TruncMonth)
+
+        qs = (
+            Appointment.objects
+            .filter(status="completed", payment_status="paid")
+            .exclude(platform_commission=None)
+        )
+
+        # Total all-time
+        totals = qs.aggregate(
+            total_revenue=Sum("platform_commission"),
+            total_gross=Sum("fee"),
+            total_appointments=Count("id"),
+        )
+
+        # Grouped by period
+        grouped = (
+            qs.annotate(period=trunc_fn("date"))
+            .values("period")
+            .annotate(
+                revenue=Sum("platform_commission"),
+                gross=Sum("fee"),
+                count=Count("id"),
+            )
+            .order_by("-period")
+        )
+
+        return Response({
+            "period":              period,
+            "total_revenue":       totals["total_revenue"]       or Decimal("0.00"),
+            "total_gross":         totals["total_gross"]         or Decimal("0.00"),
+            "total_appointments":  totals["total_appointments"]  or 0,
+            "breakdown":           list(grouped),
+        })
 
 
 # ── On-Demand / Instant Consult ───────────────────────────────────────────────

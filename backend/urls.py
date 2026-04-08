@@ -29,6 +29,7 @@ urlpatterns = [
     path("api/chat/",                           include("chat.urls")),
     path("api/pharmacy/",                       include("pharmacy.urls")),
     path("api/notifications/",                  include("notifications.urls")),
+    path("api/payouts/",                        include("payouts.urls")),
     path("api/patients/my-doctors/",            MyDoctorsView.as_view(), name="my-doctors"),
     # Family members: GET/POST /api/patients/family-members/
     #                 PATCH/DELETE /api/patients/family-members/{id}/

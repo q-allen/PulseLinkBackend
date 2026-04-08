@@ -251,6 +251,17 @@ class DoctorProfile(models.Model):
         help_text="Set True when the doctor finishes the onboarding wizard.",
     )
 
+    # ── Commission ────────────────────────────────────────────────────────────
+    # Platform takes 15% of every completed online/on-demand consultation fee.
+    # In-clinic consultations are always 0% (doctor keeps 100%).
+    # Admin can override per-doctor via the admin panel.
+    commission_rate = models.DecimalField(
+        max_digits=5,
+        decimal_places=2,
+        default=15.00,
+        help_text="Platform commission % deducted from online consultation fees. Default: 15%.",
+    )
+
     # ── Timestamps ────────────────────────────────────────────────────────────
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)

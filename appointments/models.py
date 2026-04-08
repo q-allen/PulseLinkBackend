@@ -113,6 +113,21 @@ class Appointment(models.Model):
     notes          = models.TextField(blank=True)
     fee            = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
 
+    # ── Commission / Earnings (calculated on completion) ───────────────────────────
+    # Populated atomically when status -> "completed" AND payment_status == "paid".
+    # Formula (online/on_demand only):
+    #   platform_commission = fee * (doctor.commission_rate / 100)   [default 15%]
+    #   doctor_earnings     = fee - platform_commission
+    # In-clinic appointments: both fields remain None (0% commission).
+    doctor_earnings = models.DecimalField(
+        max_digits=10, decimal_places=2, null=True, blank=True,
+        help_text="Net amount the doctor receives after platform commission.",
+    )
+    platform_commission = models.DecimalField(
+        max_digits=10, decimal_places=2, null=True, blank=True,
+        help_text="15% platform fee deducted from online consultation fee.",
+    )
+
     # On-demand / NowServing fields
     is_on_demand   = models.BooleanField(default=False)
     video_link     = models.URLField(max_length=500, blank=True)
@@ -181,6 +196,11 @@ class Appointment(models.Model):
 
     def __str__(self):
         return f"Apt #{self.pk} — {self.patient} with {self.doctor} on {self.date}"
+
+    @property
+    def net_earnings(self):
+        """Alias for doctor_earnings. Returns None if commission not yet calculated."""
+        return self.doctor_earnings
 
     @property
     def video_duration_seconds(self):

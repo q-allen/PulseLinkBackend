@@ -50,6 +50,7 @@ class AppointmentListSerializer(serializers.ModelSerializer):
             "date", "time", "type", "status", "payment_status",
             "queue_number", "queue_position", "estimated_wait_minutes",
             "is_on_demand", "fee", "effective_fee",
+            "doctor_earnings", "platform_commission",
             "hmo_provider", "hmo_coverage_percent",
             "clinic_info",
             "booked_for_name", "patient_profile", "patient_profile_data",
@@ -272,6 +273,7 @@ class AppointmentDetailSerializer(serializers.ModelSerializer):
             "payment_display_note",
             "queue_number", "queue_position", "estimated_wait_minutes",
             "is_on_demand", "fee", "effective_fee",
+            "doctor_earnings", "platform_commission",
             "hmo_provider", "hmo_coverage_percent",
             "symptoms", "notes", "pre_consult_files",
             "video_link", "video_room_id", "video_password", "video_room_url",
@@ -608,3 +610,17 @@ class FollowUpInvitationSerializer(serializers.ModelSerializer):
 
     def get_appointment_type(self, obj):
         return obj.appointment.type if obj.appointment else None
+
+
+# ── Doctor Earnings Dashboard ─────────────────────────────────────────────────
+
+class DoctorEarningsSummarySerializer(serializers.Serializer):
+    """
+    Aggregated earnings summary for the doctor dashboard.
+    Returned by GET /appointments/earnings/summary/
+    """
+    total_earnings        = serializers.DecimalField(max_digits=12, decimal_places=2)
+    total_commission      = serializers.DecimalField(max_digits=12, decimal_places=2)
+    total_gross           = serializers.DecimalField(max_digits=12, decimal_places=2)
+    completed_count       = serializers.IntegerField()
+    breakdown             = serializers.ListField(child=serializers.DictField())
