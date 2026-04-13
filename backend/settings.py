@@ -10,8 +10,12 @@ load_dotenv()
 BASE_DIR = Path(__file__).resolve().parent.parent
 
 # ── Security ──────────────────────────────────────────────────────────────────
-SECRET_KEY = os.environ.get("SECRET_KEY")
 DEBUG = os.environ.get("DEBUG", "True") == "True"
+SECRET_KEY = os.environ.get("SECRET_KEY")
+if not SECRET_KEY:
+    if not DEBUG:
+        raise RuntimeError("SECRET_KEY must be set in production.")
+    SECRET_KEY = "dev-only-insecure-secret-key-do-not-use-in-production"  # noqa: S105
 ALLOWED_HOSTS = [h.strip() for h in os.environ.get("ALLOWED_HOSTS", "localhost,127.0.0.1").split(",") if h.strip()]
 
 # ── Installed Apps ────────────────────────────────────────────────────────────
@@ -188,10 +192,27 @@ else:
 #     )
 # }
 
+_DB_URL = os.environ.get("DATABASE_URL")
+if not _DB_URL:
+    _db_user = os.environ.get("DB_USER")
+    _db_password = os.environ.get("DB_PASSWORD")
+    _db_host = os.environ.get("DB_HOST", "localhost")
+    _db_port = os.environ.get("DB_PORT", "5432")
+    _db_name = os.environ.get("DB_NAME")
+    if all([_db_user, _db_password, _db_host, _db_port, _db_name]):
+        _DB_URL = f"postgresql://{_db_user}:{_db_password}@{_db_host}:{_db_port}/{_db_name}"
+    elif not DEBUG:
+        raise RuntimeError("DATABASE_URL or DB_USER/DB_PASSWORD/DB_HOST/DB_PORT/DB_NAME must be set in production.")
+
+if not _DB_URL and not DEBUG:
+    raise RuntimeError("DATABASE_URL or DB_* variables must be set in production.")
+
+_SQLITE_FALLBACK = os.environ.get("SQLITE_URL", "sqlite:///" + str(BASE_DIR / "db.sqlite3"))
+
 DATABASES = {
-    'default': dj_database_url.config(
-        default=f"postgresql://{os.getenv('DB_USER')}:{os.getenv('DB_PASSWORD')}@{os.getenv('DB_HOST')}:{os.getenv('DB_PORT')}/{os.getenv('DB_NAME')}",
-        conn_max_age=600
+    "default": dj_database_url.config(
+        default=_DB_URL if _DB_URL else _SQLITE_FALLBACK,
+        conn_max_age=600,
     )
 }
 
@@ -368,6 +389,11 @@ FILE_UPLOAD_MAX_MEMORY_SIZE = 10 * 1024 * 1024   # 10 MB
 DATA_UPLOAD_MAX_MEMORY_SIZE = 10 * 1024 * 1024
 
 # ── Jazzmin Admin ─────────────────────────────────────────────────────────────
+_JAZZMIN_CHANGEFORM_OVERRIDES = {
+    "auth.user":  "collapsible",
+    "users.user": "collapsible",
+}
+
 JAZZMIN_SETTINGS = {
     # ── Branding ──────────────────────────────────────────────────────────────
     "site_title":    "CareConnect Admin",
@@ -460,10 +486,7 @@ JAZZMIN_SETTINGS = {
     "use_google_fonts_cdn":  True,
     "show_ui_builder":       False,
     "changeform_format":     "horizontal_tabs",
-    "changeform_format_overrides": {
-        "auth.user":    "collapsible",
-        "users.user":   "collapsible",
-    },
+    "changeform_format_overrides": _JAZZMIN_CHANGEFORM_OVERRIDES,
     "language_chooser": False,
 }
 

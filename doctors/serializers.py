@@ -142,6 +142,7 @@ class DoctorDetailSerializer(serializers.ModelSerializer):
     phone             = serializers.CharField(source="user.phone", read_only=True)
     is_available_now  = serializers.SerializerMethodField()
     profile_photo     = serializers.SerializerMethodField()
+    signature         = serializers.SerializerMethodField()
     hospitals         = DoctorHospitalSerializer(many=True, read_only=True)
     services          = DoctorServiceSerializer(many=True, read_only=True)
     hmos              = DoctorHMOSerializer(many=True, read_only=True)
@@ -156,7 +157,7 @@ class DoctorDetailSerializer(serializers.ModelSerializer):
         fields = [
             "id", "user_id", "full_name", "email", "phone",
             "specialty", "sub_specialties", "prc_license", "years_of_experience",
-            "profile_photo", "bio", "languages_spoken",
+            "profile_photo", "signature", "bio", "languages_spoken",
             "clinic_name", "clinic_address", "city", "clinic_lat", "clinic_lng",
             "consultation_fee_online", "consultation_fee_in_person",
             "is_on_demand", "is_available_now", "is_verified", "invite_accepted", "last_active_at",
@@ -193,6 +194,17 @@ class DoctorDetailSerializer(serializers.ModelSerializer):
     def get_review_count(self, obj):
         from appointments.models import Review
         return Review.objects.filter(doctor=obj.user).count()
+
+    def get_signature(self, obj):
+        if not obj.signature:
+            return None
+        url = obj.signature.name if hasattr(obj.signature, 'name') else str(obj.signature)
+        if url.startswith('http'):
+            return url
+        try:
+            return obj.signature.url
+        except Exception:
+            return None
 
     def get_recent_reviews(self, obj):
         """Return the 10 most recent reviews with patient name, rating, comment, and doctor reply."""
@@ -581,9 +593,14 @@ class DoctorProfileCompletionSerializer(serializers.ModelSerializer):
     PATCH /api/doctors/me/complete/
 
     Doctor onboarding wizard — partial update for DoctorProfile fields.
-    Also accepts `services` (list of service name strings) and
-    `hmos` (list of HMO name strings) to set the M2M-style related rows,
-    and `clinic_lat`/`clinic_lng` from the Google Maps pin.
+    Also accepts `services` / `hmos` (lists of name strings) and
+    `clinic_lat`/`clinic_lng` from the Google Maps pin.
+
+    New verification fields (Step 5 & 6):
+      - signature       : PNG e-signature upload
+      - prc_card_image  : PRC license card photo
+      - face_front/left/right : liveness photos
+      - is_face_verified: set True after blink detection passes
     """
 
     # Write-only helpers for services and HMOs
@@ -598,6 +615,12 @@ class DoctorProfileCompletionSerializer(serializers.ModelSerializer):
         model = DoctorProfile
         fields = [
             "profile_photo",
+            "signature",
+            "prc_card_image",
+            "face_front",
+            "face_left",
+            "face_right",
+            "is_face_verified",
             "bio",
             "languages_spoken",
             "clinic_name",
@@ -620,7 +643,9 @@ class DoctorProfileCompletionSerializer(serializers.ModelSerializer):
         extra_kwargs = {
             f: {"required": False}
             for f in [
-                "profile_photo", "bio", "languages_spoken",
+                "profile_photo", "signature", "prc_card_image",
+                "face_front", "face_left", "face_right", "is_face_verified",
+                "bio", "languages_spoken",
                 "clinic_name", "clinic_address", "city",
                 "clinic_lat", "clinic_lng",
                 "consultation_fee_online", "consultation_fee_in_person",
@@ -640,21 +665,49 @@ class DoctorProfileCompletionSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError("Must be a list of sub-specialty strings.")
         return value
 
+    def validate_signature(self, value):
+        """
+        Enforce PNG-only upload for e-signatures (transparent background required).
+        This runs only when a new file is uploaded in the request payload.
+        """
+        content_type = getattr(value, "content_type", "")
+        if content_type and content_type.lower() != "image/png":
+            raise serializers.ValidationError(
+                "E-signature must be a PNG image (transparent background)."
+            )
+        return value
+
     def validate(self, attrs):
         if attrs.get("is_profile_complete"):
             instance = self.instance
+            errors = {}
+
             clinic_name = attrs.get("clinic_name") or getattr(instance, "clinic_name", "")
             specialty   = attrs.get("specialty")   or getattr(instance, "specialty",   "")
             fee_online  = attrs.get("consultation_fee_online")    or getattr(instance, "consultation_fee_online",    None)
             fee_person  = attrs.get("consultation_fee_in_person") or getattr(instance, "consultation_fee_in_person", None)
 
-            errors = {}
             if not clinic_name:
                 errors["clinic_name"] = "Clinic name is required to complete your profile."
             if not specialty:
                 errors["specialty"] = "Specialty is required to complete your profile."
             if not fee_online and not fee_person:
                 errors["consultation_fee_online"] = "At least one consultation fee is required."
+
+            # Verify all document/face fields are present
+            signature      = attrs.get("signature")      or getattr(instance, "signature",      None)
+            prc_card_image = attrs.get("prc_card_image") or getattr(instance, "prc_card_image", None)
+            face_front     = attrs.get("face_front")     or getattr(instance, "face_front",     None)
+            face_left      = attrs.get("face_left")      or getattr(instance, "face_left",      None)
+            face_right     = attrs.get("face_right")     or getattr(instance, "face_right",     None)
+
+            if not signature:
+                errors["signature"] = "E-signature upload is required."
+            if not prc_card_image:
+                errors["prc_card_image"] = "PRC license card photo is required."
+            if not face_front or not face_left or not face_right:
+                errors["face_front"] = "All three face verification photos are required."
+
             if errors:
                 raise serializers.ValidationError(errors)
         return attrs
@@ -663,6 +716,21 @@ class DoctorProfileCompletionSerializer(serializers.ModelSerializer):
         # Pop write-only relation fields before saving model fields
         services_input = validated_data.pop("services", None)
         hmos_input     = validated_data.pop("hmos", None)
+
+        # Auto-verify faces if all three photos are present
+        face_front = validated_data.get("face_front") or instance.face_front
+        face_left = validated_data.get("face_left") or instance.face_left
+        face_right = validated_data.get("face_right") or instance.face_right
+        
+        if face_front and face_left and face_right:
+            # Only auto-verify if not already verified or if new photos uploaded
+            if not instance.is_face_verified or any(k in validated_data for k in ["face_front", "face_left", "face_right"]):
+                from .face_verification import verify_face_photos
+                is_verified, message = verify_face_photos(face_front, face_left, face_right)
+                if is_verified:
+                    validated_data["is_face_verified"] = True
+                else:
+                    raise serializers.ValidationError({"face_verification": message})
 
         for attr, value in validated_data.items():
             setattr(instance, attr, value)

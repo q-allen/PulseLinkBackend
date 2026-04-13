@@ -310,6 +310,14 @@
 
   <div class="signature-row">
     <div class="signature">
+      {% if doctor_signature_url %}
+        <img src="{{ doctor_signature_url }}" alt="Doctor Signature"
+             style="max-height:64px; max-width:200px; object-fit:contain; display:block; margin-bottom:4px;" />
+      {% else %}
+        <div style="height:48px; display:flex; align-items:flex-end; margin-bottom:4px;">
+          <span style="font-size:9px; color:#9ca3af; font-style:italic;">Please upload your signature in profile</span>
+        </div>
+      {% endif %}
       <div class="doctor-name">{{ doctor_name }}</div>
       <div class="doctor-cred">
         {% if doctor_prc %}PRC: {{ doctor_prc }} · {% endif %}

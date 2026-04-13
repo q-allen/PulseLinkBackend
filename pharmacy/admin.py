@@ -45,6 +45,28 @@ def reject_prescriptions(modeladmin, request, queryset):
     messages.warning(request, f"{updated} prescription(s) rejected.")
 
 
+@admin.action(description=_("Re-upload selected files to Cloudinary (fix broken URLs)"))
+def reupload_to_raw(modeladmin, request, queryset):
+    import requests as req
+    from django.core.files.base import ContentFile
+    ok = 0
+    for upload in queryset.exclude(file=""):
+        old_url = upload.file.url
+        try:
+            r = req.get(old_url, timeout=15)
+            r.raise_for_status()
+        except Exception:
+            messages.error(request, f"Upload #{upload.pk}: could not fetch file.")
+            continue
+        content_type = r.headers.get("Content-Type", "")
+        filename = upload.file.name.split("/")[-1]
+        if "." not in filename:
+            filename += ".pdf" if "pdf" in content_type else ".jpg"
+        upload.file.save(filename, ContentFile(r.content), save=True)
+        ok += 1
+    messages.success(request, f"{ok} file(s) re-uploaded successfully.")
+
+
 @admin.register(PharmacyPrescriptionUpload)
 class PharmacyPrescriptionUploadAdmin(admin.ModelAdmin):
     list_display  = ("id", "patient", "order_ref_link", "status_badge", "file_preview", "created_at")
@@ -52,7 +74,7 @@ class PharmacyPrescriptionUploadAdmin(admin.ModelAdmin):
     search_fields = ("patient__email", "order__order_ref")
     readonly_fields = ("patient", "order", "file_preview_large", "created_at", "updated_at")
     fields        = ("patient", "order", "file_preview_large", "status", "notes", "created_at", "updated_at")
-    actions       = [approve_prescriptions, reject_prescriptions]
+    actions       = [approve_prescriptions, reject_prescriptions, reupload_to_raw]
     list_per_page = 25
 
     @admin.display(description="Order")
@@ -78,7 +100,7 @@ class PharmacyPrescriptionUploadAdmin(admin.ModelAdmin):
         if not obj.file:
             return "—"
         url = obj.file.url
-        if url.lower().endswith(".pdf"):
+        if obj.file.name.lower().endswith(".pdf"):
             return format_html('<a href="{}" target="_blank">📄 View PDF</a>', url)
         return format_html('<a href="{}" target="_blank"><img src="{}" style="height:40px;border-radius:4px"></a>', url, url)
 
@@ -87,7 +109,7 @@ class PharmacyPrescriptionUploadAdmin(admin.ModelAdmin):
         if not obj.file:
             return "No file uploaded."
         url = obj.file.url
-        if url.lower().endswith(".pdf"):
+        if obj.file.name.lower().endswith(".pdf"):
             return format_html(
                 '<a href="{}" target="_blank" style="font-size:14px">📄 Open PDF in new tab</a>', url
             )
@@ -208,7 +230,7 @@ class OrderAdmin(admin.ModelAdmin):
             if not upload.file:
                 return "No file."
             url = upload.file.url
-            if url.lower().endswith(".pdf"):
+            if upload.file.name.lower().endswith(".pdf"):
                 return format_html('<a href="{}" target="_blank">📄 Open PDF</a>', url)
             return format_html(
                 '<a href="{}" target="_blank">'

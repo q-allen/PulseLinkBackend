@@ -788,7 +788,7 @@ class CompleteDoctorProfileView(APIView):
 
     Doctor onboarding wizard endpoint.
     NowServing.ph / SeriousMD pattern: after activation doctors are forced
-    through a 4-step wizard before the full dashboard is unlocked.
+    through a 6-step wizard before the full dashboard is unlocked.
 
     Each step PATCHes this endpoint with partial data (multipart for photo).
     The final step sends is_profile_complete=True.
@@ -799,7 +799,10 @@ class CompleteDoctorProfileView(APIView):
                "consultation_fee_online": 500, "consultation_fee_in_person": 400}
       Step 3: {"weekly_schedule": {"monday": {"start": "09:00", "end": "17:00"}},
                "is_on_demand": false}
-      Step 4: {"specialty": "General Medicine", "is_profile_complete": true}
+      Step 4: {"specialty": "General Medicine"}
+      Step 5: {"signature": <png>, "prc_card_image": <jpg/png>}
+      Step 6: {"face_front": <jpg>, "face_left": <jpg>, "face_right": <jpg>,
+               "is_face_verified": true, "is_profile_complete": true}
     """
     permission_classes = [IsAuthenticated]
     parser_classes = [MultiPartParser, FormParser, JSONParser]
@@ -812,10 +815,30 @@ class CompleteDoctorProfileView(APIView):
                 {"detail": "Doctor profile not found."},
                 status=status.HTTP_404_NOT_FOUND,
             )
-        return Response(
-            DoctorDetailSerializer(profile, context={"request": request}).data,
-            status=status.HTTP_200_OK,
+        def _url(field):
+            """Safely resolve a Cloudinary or local media URL."""
+            if not field:
+                return None
+            try:
+                name = field.name if hasattr(field, "name") else str(field)
+                return name if name.startswith("http") else field.url
+            except Exception:
+                return None
+
+        data = DoctorDetailSerializer(profile, context={"request": request}).data
+        data.update(
+            {
+                "is_profile_complete": profile.is_profile_complete,
+                # Keep existing serializer value if present, otherwise resolve directly.
+                "signature": data.get("signature") or _url(profile.signature),
+                "prc_card_image": _url(profile.prc_card_image),
+                "face_front": _url(profile.face_front),
+                "face_left": _url(profile.face_left),
+                "face_right": _url(profile.face_right),
+                "is_face_verified": profile.is_face_verified,
+            }
         )
+        return Response(data, status=status.HTTP_200_OK)
 
     def patch(self, request):
         profile = _get_doctor_profile(request)
@@ -829,6 +852,17 @@ class CompleteDoctorProfileView(APIView):
         )
         serializer.is_valid(raise_exception=True)
         profile = serializer.save()
+
+        def _url(field):
+            """Safely resolve a Cloudinary or local media URL."""
+            if not field:
+                return None
+            try:
+                name = field.name if hasattr(field, "name") else str(field)
+                return name if name.startswith("http") else field.url
+            except Exception:
+                return None
+
         return Response(
             {
                 "is_profile_complete":        profile.is_profile_complete,
@@ -838,6 +872,12 @@ class CompleteDoctorProfileView(APIView):
                 "consultation_fee_online":    str(profile.consultation_fee_online or ""),
                 "consultation_fee_in_person": str(profile.consultation_fee_in_person or ""),
                 "is_on_demand":               profile.is_on_demand,
+                "signature":                  _url(profile.signature),
+                "prc_card_image":             _url(profile.prc_card_image),
+                "face_front":                 _url(profile.face_front),
+                "face_left":                  _url(profile.face_left),
+                "face_right":                 _url(profile.face_right),
+                "is_face_verified":           profile.is_face_verified,
             },
             status=status.HTTP_200_OK,
         )

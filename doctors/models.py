@@ -133,6 +133,13 @@ class DoctorProfile(models.Model):
         max_length=500,
         help_text="Headshot shown on patient-facing cards. Builds trust (NowServing pattern).",
     )
+    signature = models.ImageField(
+        upload_to="doctor_signatures/",
+        null=True,
+        blank=True,
+        max_length=500,
+        help_text="E-signature image (PNG with transparent background) embedded in prescription PDFs.",
+    )
     bio = models.TextField(
         blank=True,
         help_text="About / professional summary shown on detail page.",
@@ -224,6 +231,42 @@ class DoctorProfile(models.Model):
     invite_accepted = models.BooleanField(
         default=False,
         help_text="Set True when doctor completes activation (sets password via invite link).",
+    )
+
+    # ── Verification documents ────────────────────────────────────────────────
+    prc_card_image = models.ImageField(
+        upload_to="prc_cards/",
+        null=True,
+        blank=True,
+        max_length=500,
+        help_text="Clear front photo of the doctor's PRC license card.",
+    )
+
+    # ── Face verification photos ──────────────────────────────────────────────
+    face_front = models.ImageField(
+        upload_to="face_verification/",
+        null=True,
+        blank=True,
+        max_length=500,
+        help_text="Front-facing liveness photo.",
+    )
+    face_left = models.ImageField(
+        upload_to="face_verification/",
+        null=True,
+        blank=True,
+        max_length=500,
+        help_text="Left-side liveness photo.",
+    )
+    face_right = models.ImageField(
+        upload_to="face_verification/",
+        null=True,
+        blank=True,
+        max_length=500,
+        help_text="Right-side liveness photo.",
+    )
+    is_face_verified = models.BooleanField(
+        default=False,
+        help_text="Set True after all three face photos are captured and blink detected.",
     )
 
     # ── Profile completion (NowServing pattern: wizard gate) ──────────────────

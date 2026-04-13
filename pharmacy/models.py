@@ -1,5 +1,6 @@
 from django.conf import settings
 from django.db import models
+from cloudinary_storage.storage import RawMediaCloudinaryStorage
 
 
 class Medicine(models.Model):
@@ -119,7 +120,7 @@ class PharmacyPrescriptionUpload(models.Model):
         null=True, blank=True,
         related_name="prescription_upload",
     )
-    file       = models.FileField(upload_to=_rx_upload_path, max_length=500)
+    file       = models.FileField(upload_to=_rx_upload_path, max_length=500, storage=RawMediaCloudinaryStorage())
     status     = models.CharField(max_length=10, choices=STATUS_CHOICES, default="pending")
     notes      = models.TextField(blank=True, help_text="Admin review notes.")
     created_at = models.DateTimeField(auto_now_add=True)

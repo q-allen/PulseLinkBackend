@@ -26,4 +26,3 @@ db.sqlite3
 .vscode/
 .idea/
 *.swp
-.env.example

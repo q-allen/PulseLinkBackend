@@ -206,7 +206,7 @@ class DoctorProfileAdmin(admin.ModelAdmin):
         "user__email", "user__first_name", "user__last_name",
         "prc_license", "clinic_name",
     )
-    readonly_fields       = ("created_at", "updated_at", "invite_accepted", "last_active_at", "profile_photo_preview")
+    readonly_fields       = ("created_at", "updated_at", "invite_accepted", "last_active_at", "profile_photo_preview", "prc_card_preview", "signature_preview", "face_verification_preview")
     ordering              = ("-created_at",)
     inlines               = [DoctorHospitalInline, DoctorServiceInline, DoctorHMOInline]
     list_per_page         = 25
@@ -218,6 +218,9 @@ class DoctorProfileAdmin(admin.ModelAdmin):
         }),
         ("Profile", {
             "fields": ("profile_photo_preview", "profile_photo", "bio", "languages_spoken"),
+        }),
+        ("Verification Documents", {
+            "fields": ("prc_card_preview", "prc_card_image", "signature_preview", "signature", "face_verification_preview", "face_front", "face_left", "face_right", "is_face_verified"),
         }),
         ("Location", {
             "fields": ("clinic_name", "clinic_address", "city"),
@@ -244,6 +247,33 @@ class DoctorProfileAdmin(admin.ModelAdmin):
         if not url.startswith(("http://", "https://")):
             url = obj.profile_photo.url
         return format_html('<img src="{}" style="max-height:120px;border-radius:8px;" />', url)
+
+    @admin.display(description="PRC Card")
+    def prc_card_preview(self, obj):
+        if not obj.prc_card_image:
+            return "No PRC card uploaded"
+        url = obj.prc_card_image.url
+        return format_html('<img src="{}" style="max-height:120px;border-radius:8px;" />', url)
+
+    @admin.display(description="E-Signature")
+    def signature_preview(self, obj):
+        if not obj.signature:
+            return "No signature uploaded"
+        url = obj.signature.url
+        return format_html('<img src="{}" style="max-height:80px;" />', url)
+
+    @admin.display(description="Face Verification")
+    def face_verification_preview(self, obj):
+        html_parts = []
+        if obj.face_front:
+            html_parts.append(f'<div><small>Front:</small><br><img src="{obj.face_front.url}" style="max-height:100px;border-radius:8px;margin:4px;" /></div>')
+        if obj.face_left:
+            html_parts.append(f'<div><small>Left:</small><br><img src="{obj.face_left.url}" style="max-height:100px;border-radius:8px;margin:4px;" /></div>')
+        if obj.face_right:
+            html_parts.append(f'<div><small>Right:</small><br><img src="{obj.face_right.url}" style="max-height:100px;border-radius:8px;margin:4px;" /></div>')
+        if not html_parts:
+            return "No face verification photos"
+        return format_html('<div style="display:flex;gap:8px;">{}</div>', ''.join(html_parts))
 
     @admin.display(description="Name", ordering="user__last_name")
     def full_name(self, obj):

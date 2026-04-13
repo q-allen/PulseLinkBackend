@@ -1,18 +1,18 @@
-Django==5.1.7
+Django==5.1.13
 djangorestframework==3.15.2
 django-filter==24.3
 djangorestframework-simplejwt==5.5.0
 django-cors-headers==4.7.0
-django-jazzmin
+django-jazzmin==3.0.4
 psycopg2-binary==2.9.10
-redis==5.0.3
-django-redis==5.4.0
-python-dotenv==1.0.1
-dj-database-url==2.2.0
-Pillow==11.2.1
+redis==5.3.1
+django-redis==6.0.0
+python-dotenv==1.2.2
+dj-database-url==2.3.0
+Pillow==11.3.0
 gunicorn==23.0.0
 whitenoise==6.9.0
-requests==2.32.3
+requests==2.33.0
 asgiref==3.8.1
 sqlparse==0.5.3
 tzdata==2025.2
@@ -22,9 +22,14 @@ channels-redis==4.2.1
 celery==5.4.0
 django-celery-beat==2.7.0
 # Cloudinary media storage
-cloudinary
-django-cloudinary-storage
+cloudinary==1.44.1
+django-cloudinary-storage==0.3.0
 # PDF generation
-reportlab==4.2.5
+reportlab==4.4.10
+weasyprint==68.1
+# Stripe payments
+stripe==11.6.0
 # Optional: SMS via Semaphore (uncomment when needed)
 # semaphore-sms==1.0.0
+# Face verification
+face-recognition==1.3.0

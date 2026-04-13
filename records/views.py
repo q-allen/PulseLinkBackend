@@ -190,7 +190,54 @@ def _build_prescription_pdf_bytes(prescription) -> bytes:
     story += [notes_tbl, Spacer(1, 14)]
 
     creds = " · ".join(filter(None, [f"PRC: {prc}" if prc else "", f"PTR: {ptr}" if ptr else ""]))
-    sig_tbl = Table([[Paragraph(f"<b>{doctor_name}</b><br/><font size='8' color='#6b7280'>{creds or 'Digitally signed via CareConnect'}</font>", body_s), Paragraph("Digitally verified prescription<br/>issued via CareConnect", footer_s)]], colWidths=[100*mm, 65*mm])
+
+    # ── E-signature image ─────────────────────────────────────────────────────
+    sig_image = None
+    if doctor_profile and doctor_profile.signature:
+        try:
+            from reportlab.platypus import Image as RLImage
+            import io as _io
+            sig_field = doctor_profile.signature
+            # .url returns the full https:// Cloudinary URL (or local /media/ path)
+            try:
+                sig_url = sig_field.url
+            except Exception:
+                sig_url = sig_field.name if hasattr(sig_field, 'name') else str(sig_field)
+            if sig_url.startswith('http'):
+                import urllib.request as _urlreq
+                req = _urlreq.Request(sig_url, headers={'User-Agent': 'CareConnect/1.0'})
+                with _urlreq.urlopen(req, timeout=8) as resp:
+                    sig_bytes = resp.read()
+                sig_image = RLImage(_io.BytesIO(sig_bytes), width=110, height=44, kind='bound')
+            else:
+                from django.conf import settings as _settings
+                import os as _os
+                local_path = _os.path.join(_settings.MEDIA_ROOT, sig_url.lstrip('/'))
+                if _os.path.exists(local_path):
+                    sig_image = RLImage(local_path, width=110, height=44, kind='bound')
+        except Exception as sig_exc:
+            logger.warning("Could not load doctor signature for Rx #%s: %s", prescription.pk, sig_exc)
+
+    sig_left_items = []
+    if sig_image:
+        sig_left_items.append(sig_image)
+    else:
+        sig_left_items.append(Paragraph(
+            "<font size='8' color='#9ca3af'><i>Please upload your signature in profile</i></font>",
+            body_s,
+        ))
+    sig_left_items.append(Paragraph(
+        f"<b>{doctor_name}</b><br/><font size='8' color='#6b7280'>{creds or 'Digitally signed via CareConnect'}</font>",
+        body_s,
+    ))
+
+    from reportlab.platypus import KeepInFrame
+    sig_left_frame = KeepInFrame(100*mm, 60, sig_left_items, mode='shrink')
+
+    sig_tbl = Table(
+        [[sig_left_frame, Paragraph("Digitally verified prescription<br/>issued via CareConnect", footer_s)]],
+        colWidths=[100*mm, 65*mm],
+    )
     sig_tbl.setStyle(TableStyle([("VALIGN",(0,0),(-1,-1),"BOTTOM"),("ALIGN",(1,0),(1,0),"CENTER")]))
     story += [sig_tbl, Spacer(1, 8), Paragraph("This electronic prescription is valid when verified by the prescribing physician.", footer_s)]
 

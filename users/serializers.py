@@ -324,18 +324,25 @@ class LoginSerializer(serializers.Serializer):
 
     def validate(self, attrs):
         """Authenticate user with clear error messages."""
-        user = authenticate(username=attrs["email"], password=attrs["password"])
-        
+        email = attrs["email"]
+
+        if not User.objects.filter(email=email).exists():
+            raise serializers.ValidationError(
+                "No account found with this email. Please sign up first."
+            )
+
+        user = authenticate(username=email, password=attrs["password"])
+
         if not user:
             raise serializers.ValidationError(
-                "The email or password you entered is incorrect. Please try again."
+                "The password you entered is incorrect. Please try again."
             )
-        
+
         if not user.is_active:
             raise serializers.ValidationError(
                 "Your account has been deactivated. Please contact support for assistance."
             )
-        
+
         attrs["user"] = user
         return attrs
 
