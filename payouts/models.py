@@ -1,7 +1,7 @@
 """
 payouts/models.py
 
-Payout request and history for the CareConnect commission system.
+Payout request and history for the PulseLink commission system.
 
 Flow:
   1. Doctor completes an online appointment → doctor_earnings is saved on Appointment.
@@ -155,3 +155,4 @@ class Payout(models.Model):
     @property
     def is_paid(self) -> bool:
         return self.status == "paid"
+

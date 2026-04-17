@@ -1,8 +1,82 @@
 from django.contrib import admin, messages
+from django.contrib.admin.views.decorators import staff_member_required
+from django.http import Http404
+from django.urls import path
 from django.utils.html import format_html
 from django.utils.translation import gettext_lazy as _
 
 from .models import Medicine, Order, PharmacyPrescriptionUpload
+
+
+@staff_member_required
+def admin_rx_upload_file(request, pk):
+    import requests as req
+    import cloudinary
+    import cloudinary.api
+    import cloudinary.utils
+    from django.conf import settings as djsettings
+    from django.http import HttpResponse
+    try:
+        upload = PharmacyPrescriptionUpload.objects.get(pk=pk)
+    except PharmacyPrescriptionUpload.DoesNotExist:
+        raise Http404
+    if not upload.file:
+        raise Http404
+
+    stored = upload.file.name
+    cld = djsettings.CLOUDINARY_STORAGE
+    cloudinary.config(
+        cloud_name=cld["CLOUD_NAME"],
+        api_key=cld["API_KEY"],
+        api_secret=cld["API_SECRET"],
+    )
+
+    # Resolve public_id and resource_type
+    if stored.startswith("http"):
+        # Legacy: full URL stored — extract public_id and resource_type from URL
+        resource_type = "raw" if "/raw/upload/" in stored else "image"
+        after_upload = stored.split("/upload/")[-1]
+        # Strip version segment (v1234567/...)
+        parts = after_upload.split("/")
+        if parts[0].startswith("v") and parts[0][1:].isdigit():
+            parts = parts[1:]
+        public_id = "/".join(parts)
+        # Strip extension for public_id
+        if "." in public_id.split("/")[-1]:
+            fmt = public_id.rsplit(".", 1)[-1]
+            public_id = public_id.rsplit(".", 1)[0]
+        else:
+            fmt = "pdf"
+    else:
+        # New: public_id stored — find resource_type via API
+        resource_type = None
+        fmt = "pdf"
+        for rt in ("raw", "image"):
+            try:
+                info = cloudinary.api.resource(stored, resource_type=rt)
+                resource_type = rt
+                fmt = info.get("format", "pdf")
+                break
+            except Exception:
+                pass
+        if not resource_type:
+            raise Http404
+        public_id = stored
+
+    try:
+        dl_url = cloudinary.utils.private_download_url(
+            public_id, fmt, resource_type=resource_type, type="upload", attachment=True
+        )
+        r = req.get(dl_url, timeout=15)
+        r.raise_for_status()
+    except Exception:
+        raise Http404
+
+    content_type = r.headers.get("Content-Type", "application/octet-stream")
+    filename = public_id.split("/")[-1] + "." + fmt
+    response = HttpResponse(r.content, content_type=content_type)
+    response["Content-Disposition"] = f'inline; filename="{filename}"'
+    return response
 
 
 # ── Medicine Admin ────────────────────────────────────────────────────────────
@@ -77,6 +151,14 @@ class PharmacyPrescriptionUploadAdmin(admin.ModelAdmin):
     actions       = [approve_prescriptions, reject_prescriptions, reupload_to_raw]
     list_per_page = 25
 
+    def get_urls(self):
+        return [
+            path("<int:pk>/file/", self.admin_site.admin_view(admin_rx_upload_file), name="pharmacy-rx-upload-file"),
+        ] + super().get_urls()
+
+    def _proxy_url(self, obj):
+        return f"/admin/pharmacy/pharmacyprescriptionupload/{obj.pk}/file/"
+
     @admin.display(description="Order")
     def order_ref_link(self, obj):
         if obj.order:
@@ -95,12 +177,16 @@ class PharmacyPrescriptionUploadAdmin(admin.ModelAdmin):
             color, obj.get_status_display(),
         )
 
+    def _is_pdf(self, obj):
+        name = obj.file.name.lower()
+        return name.endswith(".pdf") or not any(name.endswith(ext) for ext in (".jpg", ".jpeg", ".png", ".webp", ".gif"))
+
     @admin.display(description="File")
     def file_preview(self, obj):
         if not obj.file:
             return "—"
-        url = obj.file.url
-        if obj.file.name.lower().endswith(".pdf"):
+        url = self._proxy_url(obj)
+        if self._is_pdf(obj):
             return format_html('<a href="{}" target="_blank">📄 View PDF</a>', url)
         return format_html('<a href="{}" target="_blank"><img src="{}" style="height:40px;border-radius:4px"></a>', url, url)
 
@@ -108,8 +194,8 @@ class PharmacyPrescriptionUploadAdmin(admin.ModelAdmin):
     def file_preview_large(self, obj):
         if not obj.file:
             return "No file uploaded."
-        url = obj.file.url
-        if obj.file.name.lower().endswith(".pdf"):
+        url = self._proxy_url(obj)
+        if self._is_pdf(obj):
             return format_html(
                 '<a href="{}" target="_blank" style="font-size:14px">📄 Open PDF in new tab</a>', url
             )
@@ -229,8 +315,10 @@ class OrderAdmin(admin.ModelAdmin):
             upload = obj.prescription_upload
             if not upload.file:
                 return "No file."
-            url = upload.file.url
-            if upload.file.name.lower().endswith(".pdf"):
+            url = f"/admin/pharmacy/pharmacyprescriptionupload/{upload.pk}/file/"
+            name = upload.file.name.lower()
+            is_pdf = name.endswith(".pdf") or not any(name.endswith(ext) for ext in (".jpg", ".jpeg", ".png", ".webp"))
+            if is_pdf:
                 return format_html('<a href="{}" target="_blank">📄 Open PDF</a>', url)
             return format_html(
                 '<a href="{}" target="_blank">'

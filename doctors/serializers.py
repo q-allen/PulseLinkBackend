@@ -618,9 +618,9 @@ class DoctorProfileCompletionSerializer(serializers.ModelSerializer):
             "signature",
             "prc_card_image",
             "face_front",
-            "face_left",
-            "face_right",
             "is_face_verified",
+            "face_verification_status",
+            "face_verification_error",
             "bio",
             "languages_spoken",
             "clinic_name",
@@ -644,7 +644,7 @@ class DoctorProfileCompletionSerializer(serializers.ModelSerializer):
             f: {"required": False}
             for f in [
                 "profile_photo", "signature", "prc_card_image",
-                "face_front", "face_left", "face_right", "is_face_verified",
+                "face_front", "is_face_verified",
                 "bio", "languages_spoken",
                 "clinic_name", "clinic_address", "city",
                 "clinic_lat", "clinic_lng",
@@ -654,6 +654,12 @@ class DoctorProfileCompletionSerializer(serializers.ModelSerializer):
                 "is_profile_complete",
             ]
         }
+        extra_kwargs.update(
+            {
+                "face_verification_status": {"read_only": True},
+                "face_verification_error": {"read_only": True},
+            }
+        )
 
     def validate_languages_spoken(self, value):
         if not isinstance(value, list):
@@ -695,18 +701,14 @@ class DoctorProfileCompletionSerializer(serializers.ModelSerializer):
                 errors["consultation_fee_online"] = "At least one consultation fee is required."
 
             # Verify all document/face fields are present
-            signature      = attrs.get("signature")      or getattr(instance, "signature",      None)
             prc_card_image = attrs.get("prc_card_image") or getattr(instance, "prc_card_image", None)
             face_front     = attrs.get("face_front")     or getattr(instance, "face_front",     None)
-            face_left      = attrs.get("face_left")      or getattr(instance, "face_left",      None)
-            face_right     = attrs.get("face_right")     or getattr(instance, "face_right",     None)
 
-            if not signature:
-                errors["signature"] = "E-signature upload is required."
             if not prc_card_image:
                 errors["prc_card_image"] = "PRC license card photo is required."
-            if not face_front or not face_left or not face_right:
-                errors["face_front"] = "All three face verification photos are required."
+            is_face_verified = attrs.get("is_face_verified") or getattr(instance, "is_face_verified", False)
+            if not face_front or not is_face_verified:
+                errors["face_front"] = "Face verification is required. Please complete the liveness check."
 
             if errors:
                 raise serializers.ValidationError(errors)
@@ -716,21 +718,6 @@ class DoctorProfileCompletionSerializer(serializers.ModelSerializer):
         # Pop write-only relation fields before saving model fields
         services_input = validated_data.pop("services", None)
         hmos_input     = validated_data.pop("hmos", None)
-
-        # Auto-verify faces if all three photos are present
-        face_front = validated_data.get("face_front") or instance.face_front
-        face_left = validated_data.get("face_left") or instance.face_left
-        face_right = validated_data.get("face_right") or instance.face_right
-        
-        if face_front and face_left and face_right:
-            # Only auto-verify if not already verified or if new photos uploaded
-            if not instance.is_face_verified or any(k in validated_data for k in ["face_front", "face_left", "face_right"]):
-                from .face_verification import verify_face_photos
-                is_verified, message = verify_face_photos(face_front, face_left, face_right)
-                if is_verified:
-                    validated_data["is_face_verified"] = True
-                else:
-                    raise serializers.ValidationError({"face_verification": message})
 
         for attr, value in validated_data.items():
             setattr(instance, attr, value)

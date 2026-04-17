@@ -46,12 +46,13 @@ class CreatePrescriptionSerializer(serializers.Serializer):
 class LabResultSerializer(serializers.ModelSerializer):
     doctor_name = serializers.SerializerMethodField()
     file_url    = serializers.SerializerMethodField()
+    pdf_url     = serializers.SerializerMethodField()
 
     class Meta:
         model  = LabResult
         fields = ["id", "patient", "doctor", "doctor_name", "appointment",
                   "test_name", "test_type", "date", "status", "results",
-                  "notes", "file_url", "laboratory", "created_at"]
+                  "notes", "file_url", "pdf_url", "laboratory", "created_at"]
         read_only_fields = ["id", "date", "created_at"]
 
     def get_doctor_name(self, obj):
@@ -66,6 +67,13 @@ class LabResultSerializer(serializers.ModelSerializer):
         if obj.file and request:
             return request.build_absolute_uri(obj.file.url)
         return None
+
+    def get_pdf_url(self, obj):
+        request = self.context.get("request")
+        if not obj.pk:
+            return None
+        path = f"/api/records/labs/{obj.pk}/pdf/"
+        return request.build_absolute_uri(path) if request else path
 
 
 class MedicalCertificateSerializer(serializers.ModelSerializer):

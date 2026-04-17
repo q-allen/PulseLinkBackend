@@ -46,8 +46,9 @@ class PrescriptionUploadSerializer(serializers.ModelSerializer):
 
     def get_file_url(self, obj):
         request = self.context.get("request")
-        if obj.file and request:
-            return request.build_absolute_uri(obj.file.url)
+        if obj.file and obj.pk:
+            proxy_path = f"/api/pharmacy/prescriptions/upload/{obj.pk}/file"
+            return request.build_absolute_uri(proxy_path) if request else proxy_path
         return None
 
 
@@ -79,7 +80,12 @@ class OrderSerializer(serializers.ModelSerializer):
     def get_prescription_upload(self, obj):
         try:
             upload = obj.prescription_upload
-            return {"id": upload.pk, "status": upload.status, "file_url": upload.file.url if upload.file else None}
+            file_url = None
+            if upload.file:
+                request = self.context.get("request")
+                proxy_path = f"/api/pharmacy/prescriptions/upload/{upload.pk}/file/"
+                file_url = request.build_absolute_uri(proxy_path) if request else proxy_path
+            return {"id": upload.pk, "status": upload.status, "file_url": file_url}
         except PharmacyPrescriptionUpload.DoesNotExist:
             return None
 

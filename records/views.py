@@ -140,7 +140,7 @@ def _build_prescription_pdf_bytes(prescription) -> bytes:
 
     story = []
     header_data = [[
-        Paragraph(f"<b>CareConnect · E-Prescription</b><br/><font size='14'><b>{doctor_name}</b></font><br/>{specialty + (f' · {clinic_name}' if clinic_name else '')}", sub_s),
+        Paragraph(f"<b>PulseLink · E-Prescription</b><br/><font size='14'><b>{doctor_name}</b></font><br/>{specialty + (f' · {clinic_name}' if clinic_name else '')}", sub_s),
         Paragraph(f"Prescription No.<br/><font size='13' color='#0f766e'><b>RX-{prescription.pk:06d}</b></font><br/>Date: {apt_date or prescription.date.strftime('%B %d, %Y')}", right_s),
     ]]
     header_tbl = Table(header_data, colWidths=[110*mm, 55*mm])
@@ -205,7 +205,7 @@ def _build_prescription_pdf_bytes(prescription) -> bytes:
                 sig_url = sig_field.name if hasattr(sig_field, 'name') else str(sig_field)
             if sig_url.startswith('http'):
                 import urllib.request as _urlreq
-                req = _urlreq.Request(sig_url, headers={'User-Agent': 'CareConnect/1.0'})
+                req = _urlreq.Request(sig_url, headers={'User-Agent': 'PulseLink/1.0'})
                 with _urlreq.urlopen(req, timeout=8) as resp:
                     sig_bytes = resp.read()
                 sig_image = RLImage(_io.BytesIO(sig_bytes), width=110, height=44, kind='bound')
@@ -218,27 +218,31 @@ def _build_prescription_pdf_bytes(prescription) -> bytes:
         except Exception as sig_exc:
             logger.warning("Could not load doctor signature for Rx #%s: %s", prescription.pk, sig_exc)
 
-    sig_left_items = []
-    if sig_image:
-        sig_left_items.append(sig_image)
-    else:
-        sig_left_items.append(Paragraph(
-            "<font size='8' color='#9ca3af'><i>Please upload your signature in profile</i></font>",
-            body_s,
-        ))
-    sig_left_items.append(Paragraph(
-        f"<b>{doctor_name}</b><br/><font size='8' color='#6b7280'>{creds or 'Digitally signed via CareConnect'}</font>",
-        body_s,
-    ))
+    center_s = S("center", fontSize=10, textColor=BLACK, alignment=TA_CENTER)
+    cred_s   = S("cred",   fontSize=8,  textColor=GRAY,  alignment=TA_CENTER)
 
-    from reportlab.platypus import KeepInFrame
-    sig_left_frame = KeepInFrame(100*mm, 60, sig_left_items, mode='shrink')
+    sig_cell = [sig_image] if sig_image else [
+        Paragraph("<font size='8' color='#9ca3af'><i>No signature on file</i></font>", cred_s)
+    ]
+    sig_cell.append(Paragraph(f"<b>{doctor_name}</b>", center_s))
+    sig_cell.append(Paragraph(creds or "Digitally signed via PulseLink", cred_s))
+
+    # Inner table: single column so everything is naturally centered together
+    inner = Table([[item] for item in sig_cell], colWidths=[90*mm])
+    inner.setStyle(TableStyle([
+        ("ALIGN",        (0, 0), (-1, -1), "CENTER"),
+        ("VALIGN",       (0, 0), (-1, -1), "BOTTOM"),
+        # Line appears between signature image and doctor name
+        ("LINEABOVE",    (0, 1), (0,  1),  0.75, colors.HexColor("#111827")),
+        ("TOPPADDING",   (0, 1), (0,  1),  4),
+        ("BOTTOMPADDING",(0, 0), (-1, -1), 2),
+    ]))
 
     sig_tbl = Table(
-        [[sig_left_frame, Paragraph("Digitally verified prescription<br/>issued via CareConnect", footer_s)]],
+        [[inner, Paragraph("Digitally verified prescription<br/>issued via PulseLink", footer_s)]],
         colWidths=[100*mm, 65*mm],
     )
-    sig_tbl.setStyle(TableStyle([("VALIGN",(0,0),(-1,-1),"BOTTOM"),("ALIGN",(1,0),(1,0),"CENTER")]))
+    sig_tbl.setStyle(TableStyle([("VALIGN", (0,0), (-1,-1), "BOTTOM"), ("ALIGN", (1,0), (1,0), "CENTER")]))
     story += [sig_tbl, Spacer(1, 8), Paragraph("This electronic prescription is valid when verified by the prescribing physician.", footer_s)]
 
     doc.build(story)
@@ -263,6 +267,137 @@ def generate_prescription_pdf(prescription, request=None) -> bool:
     except Exception as exc:
         logger.error("PDF generation error for prescription #%s: %s", prescription.pk, exc, exc_info=True)
         return False
+
+
+def _build_lab_request_pdf_bytes(lab) -> bytes:
+    from reportlab.lib.pagesizes import A4
+    from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
+    from reportlab.lib.units import mm
+    from reportlab.lib import colors
+    from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle
+    from reportlab.lib.enums import TA_RIGHT, TA_CENTER
+    import io, uuid as _uuid
+
+    appointment     = lab.appointment
+    patient_profile = getattr(appointment, "patient_profile", None) if appointment else None
+    doctor_profile  = getattr(lab.doctor, "doctor_profile", None)
+
+    patient_name = (
+        getattr(appointment, "booked_for_name", "") if appointment else ""
+    ) or (
+        patient_profile.full_name if patient_profile else ""
+    ) or f"{lab.patient.first_name} {lab.patient.last_name}".strip()
+
+    patient_age  = str(patient_profile.age) if patient_profile and patient_profile.age is not None else ""
+    patient_sex  = patient_profile.sex.capitalize() if patient_profile and patient_profile.sex else ""
+    patient_addr = (patient_profile.home_address if patient_profile else "") or "—"
+    doctor_name  = f"Dr. {lab.doctor.first_name} {lab.doctor.last_name}".strip()
+    specialty    = getattr(doctor_profile, "specialty", "") or ""
+    clinic_name  = getattr(doctor_profile, "clinic_name", "") or ""
+    prc          = getattr(doctor_profile, "prc_license", "") or ""
+    ptr          = getattr(doctor_profile, "ptr_license", "") or ""
+    apt_date     = appointment.date.strftime("%B %d, %Y") if appointment else lab.date.strftime("%B %d, %Y")
+
+    TEAL  = colors.HexColor("#0f766e")
+    LIGHT = colors.HexColor("#f0fdfa")
+    GRAY  = colors.HexColor("#6b7280")
+    BLACK = colors.HexColor("#111827")
+
+    buf = io.BytesIO()
+    doc = SimpleDocTemplate(buf, pagesize=A4, leftMargin=18*mm, rightMargin=18*mm, topMargin=18*mm, bottomMargin=20*mm)
+    base = getSampleStyleSheet()["Normal"]
+    _uid = _uuid.uuid4().hex
+    def S(name, **kw): return ParagraphStyle(f"lab_{name}_{_uid}", parent=base, **kw)
+
+    sub_s    = S("sub",    fontSize=9,  textColor=GRAY,  spaceAfter=1)
+    right_s  = S("right",  fontSize=9,  textColor=GRAY,  alignment=TA_RIGHT)
+    sec_s    = S("sec",    fontSize=8,  textColor=TEAL,  fontName="Helvetica-Bold", spaceAfter=4)
+    body_s   = S("body",   fontSize=10, textColor=BLACK)
+    footer_s = S("footer", fontSize=8,  textColor=GRAY,  alignment=TA_CENTER)
+    label_s  = S("lbl",    fontSize=8,  textColor=GRAY,  fontName="Helvetica-Bold", spaceAfter=1)
+
+    story = []
+    header_tbl = Table([[
+        Paragraph(f"<b>PulseLink · Lab Request</b><br/><font size='14'><b>{doctor_name}</b></font><br/>{specialty + (f' · {clinic_name}' if clinic_name else '')}", sub_s),
+        Paragraph(f"Lab Request No.<br/><font size='13' color='#0f766e'><b>LAB-{lab.pk:06d}</b></font><br/>Date: {apt_date}", right_s),
+    ]], colWidths=[110*mm, 55*mm])
+    header_tbl.setStyle(TableStyle([("VALIGN",(0,0),(-1,-1),"TOP"),("LINEBELOW",(0,0),(-1,0),1.5,TEAL),("BOTTOMPADDING",(0,0),(-1,0),8)]))
+    story += [header_tbl, Spacer(1, 8)]
+
+    story.append(Paragraph("PATIENT INFORMATION", sec_s))
+    age_sex = " / ".join(filter(None, [patient_age, patient_sex]))
+    pt_tbl = Table([
+        [Paragraph(f"<b>Patient Name</b><br/>{patient_name or '—'}", body_s), Paragraph(f"<b>Age / Sex</b><br/>{age_sex or '—'}", body_s)],
+        [Paragraph(f"<b>Address</b><br/>{patient_addr}", body_s), Paragraph(f"<b>Consultation Date</b><br/>{apt_date}", body_s)],
+    ], colWidths=[82*mm, 82*mm])
+    pt_tbl.setStyle(TableStyle([("BACKGROUND",(0,0),(-1,-1),colors.HexColor("#f9fafb")),("BOX",(0,0),(-1,-1),0.5,colors.HexColor("#e5e7eb")),("INNERGRID",(0,0),(-1,-1),0.3,colors.HexColor("#e5e7eb")),("TOPPADDING",(0,0),(-1,-1),6),("BOTTOMPADDING",(0,0),(-1,-1),6),("LEFTPADDING",(0,0),(-1,-1),8),("RIGHTPADDING",(0,0),(-1,-1),8),("VALIGN",(0,0),(-1,-1),"TOP")]))
+    story += [pt_tbl, Spacer(1, 10)]
+
+    story.append(Paragraph("LAB REQUEST DETAILS", sec_s))
+    details_tbl = Table([
+        [Paragraph("<b>TEST NAME</b>",  label_s), Paragraph(lab.test_name  or "—", body_s)],
+        [Paragraph("<b>TEST TYPE</b>",  label_s), Paragraph(lab.test_type  or "—", body_s)],
+        [Paragraph("<b>LABORATORY</b>", label_s), Paragraph(lab.laboratory or "—", body_s)],
+        [Paragraph("<b>NOTES</b>",      label_s), Paragraph(lab.notes      or "—", body_s)],
+    ], colWidths=[40*mm, 124*mm])
+    details_tbl.setStyle(TableStyle([("BACKGROUND",(0,0),(0,-1),LIGHT),("BOX",(0,0),(-1,-1),0.5,colors.HexColor("#e5e7eb")),("INNERGRID",(0,0),(-1,-1),0.3,colors.HexColor("#e5e7eb")),("TOPPADDING",(0,0),(-1,-1),6),("BOTTOMPADDING",(0,0),(-1,-1),6),("LEFTPADDING",(0,0),(-1,-1),8),("RIGHTPADDING",(0,0),(-1,-1),8),("VALIGN",(0,0),(-1,-1),"TOP")]))
+    story += [details_tbl, Spacer(1, 14)]
+
+    creds = " · ".join(filter(None, [f"PRC: {prc}" if prc else "", f"PTR: {ptr}" if ptr else ""]))
+
+    sig_image = None
+    if doctor_profile and doctor_profile.signature:
+        try:
+            from reportlab.platypus import Image as RLImage
+            import io as _io
+            sig_field = doctor_profile.signature
+            try:
+                sig_url = sig_field.url
+            except Exception:
+                sig_url = sig_field.name if hasattr(sig_field, 'name') else str(sig_field)
+            if sig_url.startswith('http'):
+                import urllib.request as _urlreq
+                req = _urlreq.Request(sig_url, headers={'User-Agent': 'PulseLink/1.0'})
+                with _urlreq.urlopen(req, timeout=8) as resp:
+                    sig_bytes = resp.read()
+                sig_image = RLImage(_io.BytesIO(sig_bytes), width=110, height=44, kind='bound')
+            else:
+                from django.conf import settings as _settings
+                import os as _os
+                local_path = _os.path.join(_settings.MEDIA_ROOT, sig_url.lstrip('/'))
+                if _os.path.exists(local_path):
+                    sig_image = RLImage(local_path, width=110, height=44, kind='bound')
+        except Exception as sig_exc:
+            logger.warning("Could not load doctor signature for Lab #%s: %s", lab.pk, sig_exc)
+
+    center_s = S("center", fontSize=10, textColor=BLACK, alignment=TA_CENTER)
+    cred_s   = S("cred",   fontSize=8,  textColor=GRAY,  alignment=TA_CENTER)
+
+    sig_cell = [sig_image] if sig_image else [
+        Paragraph("<font size='8' color='#9ca3af'><i>No signature on file</i></font>", cred_s)
+    ]
+    sig_cell.append(Paragraph(f"<b>{doctor_name}</b>", center_s))
+    sig_cell.append(Paragraph(creds or "Digitally signed via PulseLink", cred_s))
+
+    inner = Table([[item] for item in sig_cell], colWidths=[90*mm])
+    inner.setStyle(TableStyle([
+        ("ALIGN",        (0, 0), (-1, -1), "CENTER"),
+        ("VALIGN",       (0, 0), (-1, -1), "BOTTOM"),
+        ("LINEABOVE",    (0, 1), (0,  1),  0.75, colors.HexColor("#111827")),
+        ("TOPPADDING",   (0, 1), (0,  1),  4),
+        ("BOTTOMPADDING",(0, 0), (-1, -1), 2),
+    ]))
+
+    from reportlab.platypus import KeepInFrame
+    sig_tbl = Table(
+        [[inner, Paragraph("Digitally verified lab request<br/>issued via PulseLink", footer_s)]],
+        colWidths=[100*mm, 65*mm],
+    )
+    sig_tbl.setStyle(TableStyle([("VALIGN", (0,0), (-1,-1), "BOTTOM"), ("ALIGN", (1,0), (1,0), "CENTER")]))
+    story += [sig_tbl, Spacer(1, 8), Paragraph("This lab request is issued by the prescribing physician via PulseLink.", footer_s)]
+
+    doc.build(story)
+    return buf.getvalue()
 
 
 # ── Prescriptions ─────────────────────────────────────────────────────────────
@@ -423,6 +558,30 @@ class CertificatePdfProxyView(APIView):
             return Response({"detail": "Could not generate PDF."}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
+class LabRequestPdfProxyView(APIView):
+    """Stream lab request PDF bytes directly."""
+    authentication_classes = [CookieJWTAuthentication, SessionAuthentication]
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, pk):
+        try:
+            lab = LabResult.objects.get(pk=pk)
+        except LabResult.DoesNotExist:
+            return Response({"detail": "Not found."}, status=status.HTTP_404_NOT_FOUND)
+        if request.user not in (lab.patient, lab.doctor) and not request.user.is_staff:
+            return Response({"detail": "Forbidden."}, status=status.HTTP_403_FORBIDDEN)
+        try:
+            from django.http import HttpResponse
+            pdf_bytes = _build_lab_request_pdf_bytes(lab)
+            response = HttpResponse(pdf_bytes, content_type="application/pdf")
+            response["Content-Disposition"] = f'inline; filename="lab_request_{lab.pk}.pdf"'
+            response["Content-Length"] = len(pdf_bytes)
+            return response
+        except Exception as exc:
+            logger.error("PDF proxy generation failed for Lab #%s: %s", lab.pk, exc)
+            return Response({"detail": "Could not generate PDF."}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
 # ── Lab Results ───────────────────────────────────────────────────────────────
 
 class LabResultListView(APIView):
@@ -465,10 +624,27 @@ class LabResultListView(APIView):
             status=request.data.get("status", "pending"),
             file=request.FILES.get("file"),
         )
+
+        # Auto-generate lab request PDF (same as prescriptions)
+        if not lab.file:
+            try:
+                pdf_bytes = _build_lab_request_pdf_bytes(lab)
+                lab.file.save(f"lab_request_{lab.pk}.pdf", ContentFile(pdf_bytes), save=True)
+                lab.refresh_from_db()
+            except Exception as exc:
+                logger.warning("Lab request PDF generation failed for #%s: %s", lab.pk, exc)
+
+        pdf_url = None
+        if lab.file:
+            try:
+                pdf_url = request.build_absolute_uri(lab.file.url)
+            except Exception:
+                pdf_url = lab.file.url
+
         Notification.objects.create(
             user=patient, type="lab_result", title="New Lab Request",
             message=f"Dr. {request.user.first_name} {request.user.last_name} sent you a lab request: {lab.test_name}.",
-            data={"lab_result_id": lab.pk},
+            data={"lab_result_id": lab.pk, "pdf_url": pdf_url},
         )
         return Response(LabResultSerializer(lab, context={"request": request}).data, status=status.HTTP_201_CREATED)
 
@@ -704,3 +880,4 @@ def _generate_and_notify_cert(cert, request):
         message=f"Your medical certificate from Dr. {cert.doctor.first_name} {cert.doctor.last_name} is ready.",
         data={"certificate_id": cert.pk, "pdf_url": pdf_url},
     )
+

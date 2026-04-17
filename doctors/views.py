@@ -25,6 +25,7 @@ from datetime import timedelta
 from django.conf import settings
 from django.contrib.auth.tokens import default_token_generator
 from django.core.mail import send_mail
+from django.core.files.base import ContentFile
 from django.db import transaction
 from django.utils import timezone
 from django.utils.encoding import force_bytes
@@ -55,6 +56,17 @@ from .serializers import (
     SlotSerializer,
     SlotUpdateSerializer,
 )
+from .aws_liveness import (
+    LivenessConfigError,
+    compare_face_to_prc,
+    create_liveness_session,
+    extract_audit_image_bytes,
+    extract_reference_image_bytes,
+    get_liveness_results,
+    get_temporary_liveness_credentials,
+    parse_liveness_confidence,
+    parse_liveness_status,
+)
 from .utils import check_slot_overlap, dates_for_weekday_in_range, get_available_weekdays
 
 try:
@@ -78,6 +90,35 @@ def _get_doctor_profile(request) -> "DoctorProfile | None":
         return request.user.doctor_profile
     except DoctorProfile.DoesNotExist:
         return None
+
+
+def _profile_file_url(field) -> str | None:
+    """Safely resolve a Cloudinary or local media URL."""
+    if not field:
+        return None
+    try:
+        name = field.name if hasattr(field, "name") else str(field)
+        return name if name.startswith("http") else field.url
+    except Exception:
+        return None
+
+
+def _doctor_profile_completion_payload(profile: DoctorProfile) -> dict:
+    return {
+        "is_profile_complete": profile.is_profile_complete,
+        "specialty": profile.specialty,
+        "clinic_name": profile.clinic_name,
+        "city": profile.city,
+        "consultation_fee_online": str(profile.consultation_fee_online or ""),
+        "consultation_fee_in_person": str(profile.consultation_fee_in_person or ""),
+        "is_on_demand": profile.is_on_demand,
+        "signature": _profile_file_url(profile.signature),
+        "prc_card_image": _profile_file_url(profile.prc_card_image),
+        "face_front": _profile_file_url(profile.face_front),
+        "is_face_verified": profile.is_face_verified,
+        "face_verification_status": profile.face_verification_status,
+        "face_verification_error": profile.face_verification_error,
+    }
 
 
 # ── Main ViewSet ──────────────────────────────────────────────────────────────
@@ -801,8 +842,7 @@ class CompleteDoctorProfileView(APIView):
                "is_on_demand": false}
       Step 4: {"specialty": "General Medicine"}
       Step 5: {"signature": <png>, "prc_card_image": <jpg/png>}
-      Step 6: {"face_front": <jpg>, "face_left": <jpg>, "face_right": <jpg>,
-               "is_face_verified": true, "is_profile_complete": true}
+      Step 6: complete AWS liveness first, then PATCH {"is_profile_complete": true}
     """
     permission_classes = [IsAuthenticated]
     parser_classes = [MultiPartParser, FormParser, JSONParser]
@@ -815,29 +855,12 @@ class CompleteDoctorProfileView(APIView):
                 {"detail": "Doctor profile not found."},
                 status=status.HTTP_404_NOT_FOUND,
             )
-        def _url(field):
-            """Safely resolve a Cloudinary or local media URL."""
-            if not field:
-                return None
-            try:
-                name = field.name if hasattr(field, "name") else str(field)
-                return name if name.startswith("http") else field.url
-            except Exception:
-                return None
 
         data = DoctorDetailSerializer(profile, context={"request": request}).data
-        data.update(
-            {
-                "is_profile_complete": profile.is_profile_complete,
-                # Keep existing serializer value if present, otherwise resolve directly.
-                "signature": data.get("signature") or _url(profile.signature),
-                "prc_card_image": _url(profile.prc_card_image),
-                "face_front": _url(profile.face_front),
-                "face_left": _url(profile.face_left),
-                "face_right": _url(profile.face_right),
-                "is_face_verified": profile.is_face_verified,
-            }
-        )
+        completion_data = _doctor_profile_completion_payload(profile)
+        if data.get("signature"):
+            completion_data["signature"] = data["signature"]
+        data.update(completion_data)
         return Response(data, status=status.HTTP_200_OK)
 
     def patch(self, request):
@@ -852,44 +875,139 @@ class CompleteDoctorProfileView(APIView):
         )
         serializer.is_valid(raise_exception=True)
         profile = serializer.save()
+        return Response(_doctor_profile_completion_payload(profile), status=status.HTTP_200_OK)
 
-        def _url(field):
-            """Safely resolve a Cloudinary or local media URL."""
-            if not field:
-                return None
+
+class DoctorLivenessSessionView(APIView):
+    """Create a Rekognition face liveness session and short-lived browser creds."""
+
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        profile = _get_doctor_profile(request)
+        if not profile:
+            return Response({"detail": "Doctor profile not found."}, status=404)
+
+        try:
+            session_id = create_liveness_session()
+            credentials = get_temporary_liveness_credentials()
+
+            return Response({
+                "session_id": session_id,
+                "region": settings.AWS_REGION,
+                "credentials": credentials,
+            }, status=200)
+
+        except LivenessConfigError as exc:
+            import traceback
+            traceback.print_exc()
+            return Response({"detail": str(exc)}, status=500)
+        except Exception as exc:
+            import traceback
+            traceback.print_exc()
+            return Response({"detail": f"Unable to start liveness session: {str(exc)}"}, status=502)
+
+
+class DoctorLivenessCompleteView(APIView):
+    """Fetch Rekognition results, store evidence images, and update profile flags."""
+
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        profile = _get_doctor_profile(request)
+        if not profile:
+            return Response(
+                {"detail": "Doctor profile not found."},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        session_id = request.data.get("session_id")
+        if not session_id:
+            return Response(
+                {"detail": "session_id is required."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        try:
+            results = get_liveness_results(str(session_id))
+        except LivenessConfigError as exc:
+            return Response(
+                {"detail": str(exc)},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
+        except Exception as exc:
+            return Response(
+                {"detail": f"Unable to fetch liveness results: {exc}"},
+                status=status.HTTP_502_BAD_GATEWAY,
+            )
+
+        status_value = parse_liveness_status(results)
+        confidence = parse_liveness_confidence(results)
+        threshold = float(getattr(settings, "AWS_LIVENESS_SCORE_THRESHOLD", 75))
+
+        if status_value != "SUCCEEDED":
+            profile.is_face_verified = False
+            profile.face_verification_status = "manual_review"
+            profile.face_verification_error = (
+                "Face liveness did not finish successfully. Please try again."
+            )
+            profile.save(
+                update_fields=[
+                    "is_face_verified",
+                    "face_verification_status",
+                    "face_verification_error",
+                    "updated_at",
+                ]
+            )
+            payload = _doctor_profile_completion_payload(profile)
+            payload["session_id"] = session_id
+            return Response(payload, status=status.HTTP_200_OK)
+
+        reference_bytes = extract_reference_image_bytes(results)
+        audit_images = extract_audit_image_bytes(results)
+
+        if reference_bytes:
+            profile.face_front.save(
+                f"liveness-front-{profile.pk}-{session_id}.jpg",
+                ContentFile(reference_bytes),
+                save=False,
+            )
+
+        is_verified = confidence >= threshold
+
+        if is_verified and profile.prc_card_image and reference_bytes:
             try:
-                name = field.name if hasattr(field, "name") else str(field)
-                return name if name.startswith("http") else field.url
-            except Exception:
-                return None
+                prc_ok, prc_msg = compare_face_to_prc(reference_bytes, profile.prc_card_image)
+            except LivenessConfigError as exc:
+                return Response({"detail": str(exc)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+            if not prc_ok:
+                is_verified = False
+                profile.face_verification_error = prc_msg
+            else:
+                profile.face_verification_error = ""
+        elif is_verified:
+            profile.face_verification_error = ""
+        else:
+            profile.face_verification_error = (
+                "We could not confirm liveness with enough confidence. Please retry in better lighting."
+            )
 
-        return Response(
-            {
-                "is_profile_complete":        profile.is_profile_complete,
-                "specialty":                  profile.specialty,
-                "clinic_name":                profile.clinic_name,
-                "city":                       profile.city,
-                "consultation_fee_online":    str(profile.consultation_fee_online or ""),
-                "consultation_fee_in_person": str(profile.consultation_fee_in_person or ""),
-                "is_on_demand":               profile.is_on_demand,
-                "signature":                  _url(profile.signature),
-                "prc_card_image":             _url(profile.prc_card_image),
-                "face_front":                 _url(profile.face_front),
-                "face_left":                  _url(profile.face_left),
-                "face_right":                 _url(profile.face_right),
-                "is_face_verified":           profile.is_face_verified,
-            },
-            status=status.HTTP_200_OK,
-        )
+        profile.is_face_verified = is_verified
+        profile.face_verification_status = "verified" if is_verified else "manual_review"
+        profile.save()
+
+        payload = _doctor_profile_completion_payload(profile)
+        payload["session_id"] = session_id
+        return Response(payload, status=status.HTTP_200_OK)
 
 
 # ── Email helper ──────────────────────────────────────────────────────────────
 
 def _send_invite_email(email: str, first_name: str, invite_url: str) -> None:
-    subject = "Welcome to CareConnect – Activate Your Doctor Account"
+    subject = "Welcome to PulseLink – Activate My Account"
     plain = (
         f"Hi Dr. {first_name},\n\n"
-        f"An administrator has created a CareConnect doctor account for you.\n\n"
+        f"An administrator has created a PulseLink doctor account for you.\n\n"
         f"Click the link below to set your password and activate your account:\n"
         f"{invite_url}\n\n"
         f"This link expires in 3 days. If you did not expect this email, ignore it."
@@ -897,12 +1015,12 @@ def _send_invite_email(email: str, first_name: str, invite_url: str) -> None:
     html = f"""
     <div style="font-family:Poppins,sans-serif;max-width:520px;margin:auto;padding:32px;
                 border:1px solid #e5e7eb;border-radius:12px;">
-      <h2 style="color:#0d9488;margin-bottom:4px;">CareConnect</h2>
+      <h2 style="color:#0d9488;margin-bottom:4px;">PulseLink</h2>
       <p style="color:#6b7280;font-size:14px;margin-top:0;">Healthcare, made simple.</p>
       <hr style="border:none;border-top:1px solid #e5e7eb;margin:20px 0;">
       <p style="font-size:15px;color:#111827;">Hi <strong>Dr. {first_name}</strong>,</p>
       <p style="font-size:14px;color:#374151;">
-        An administrator has created a CareConnect doctor account for you.
+        An administrator has created a PulseLink doctor account for you.
         Click the button below to set your password and activate your account.
       </p>
       <div style="text-align:center;margin:28px 0;">
@@ -960,3 +1078,4 @@ class PatientHMODetailView(APIView):
             return Response({"detail": "Not found."}, status=status.HTTP_404_NOT_FOUND)
         card.delete()
         return Response(status=status.HTTP_204_NO_CONTENT)
+

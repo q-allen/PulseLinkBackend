@@ -1,7 +1,7 @@
 # Automated Face Verification
 
 ## Overview
-Face verification is now **automatic** when doctors upload their three face photos (front, left, right) during onboarding.
+Face verification is now **automatic** when doctors upload their three face photos (front, left, right) during onboarding. If a PRC card image is present, the system also checks that the PRC card face matches the live photos.
 
 ## How It Works
 
@@ -10,12 +10,16 @@ Face verification is now **automatic** when doctors upload their three face phot
    - Detects faces in each photo
    - Verifies exactly one face per photo
    - Compares all three faces to ensure they match the same person
+   - If PRC card image exists, compares the PRC card face to the live photos
    - Sets `is_face_verified=True` automatically if verification passes
+   - If verification fails (including PRC mismatch), the profile is saved for **manual review**
 
 3. **Error handling**: If verification fails, the API returns a clear error message:
    - "No face detected in [photo]"
    - "Multiple faces detected in [photo]"
    - "Face photos do not match - please ensure all photos are of the same person"
+   - "PRC card face does not match the live face photos"
+   - These errors are stored in `face_verification_error` for admin review
 
 ## Technical Details
 
@@ -43,7 +47,8 @@ PATCH /api/doctors/me/complete/
 {
   "face_front": <file>,
   "face_left": <file>,
-  "face_right": <file>
+  "face_right": <file>,
+  "prc_card_image": <file> // optional, but matched when present
   // ✅ is_face_verified set automatically
 }
 ```
@@ -60,6 +65,8 @@ Note: `face_recognition` requires `cmake` and `dlib`. On Windows, you may need t
 
 - ✅ No manual verification needed
 - ✅ Prevents mismatched photos
+- ✅ Ensures PRC card matches live photos (when provided)
+- ✅ Falls back to manual review when verification fails
 - ✅ Ensures photo quality (face must be detectable)
 - ✅ Prevents multiple people in photos
 - ✅ Immediate feedback to doctors

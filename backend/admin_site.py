@@ -2,7 +2,7 @@ from django.contrib.admin import AdminSite
 from django.utils import timezone
 
 
-class CareConnectAdminSite(AdminSite):
+class PulseLinkAdminSite(AdminSite):
     def index(self, request, extra_context=None):
         from appointments.models import Appointment
         from doctors.models import DoctorProfile, PatientHMO
@@ -44,3 +44,4 @@ class CareConnectAdminSite(AdminSite):
             "pending_doctors":     pending_doctors,
         })
         return super().index(request, extra_context)
+

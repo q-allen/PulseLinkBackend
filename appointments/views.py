@@ -62,7 +62,7 @@ def _generate_room_name(appointment_id: int) -> str:
     # Doctor and patient both derive the same URL from the appointment ID.
     # Using a random suffix was the root cause of doctor/patient being in
     # different rooms when start_video was called more than once.
-    return f"careconnect-apt-{appointment_id}"
+    return f"PulseLink-apt-{appointment_id}"
 
 
 def _generate_password(length: int = 8) -> str:
@@ -135,7 +135,7 @@ def _broadcast_queue_update(doctor_id: int, target_date):
 
 
 def _send_booking_under_review_email(appointment) -> None:
-    """Send 'under review' email to CareConnect account holder."""
+    """Send 'under review' email to PulseLink account holder."""
     from django.core.mail import send_mail
     patient = appointment.patient
     doctor = appointment.doctor
@@ -153,12 +153,12 @@ def _send_booking_under_review_email(appointment) -> None:
         f"Doctor: Dr. {doctor.first_name} {doctor.last_name}\n"
         f"Date: {date_str}\nTime: {time_str}\n\n"
         f"You will receive a confirmation email once the doctor accepts.\n\n"
-        f"— CareConnect Team"
+        f"— PulseLink Team"
     )
     
     html = f"""
     <div style="font-family:Poppins,sans-serif;max-width:540px;margin:auto;padding:32px;border:1px solid #e5e7eb;border-radius:12px;">
-      <h2 style="color:#0d9488;">CareConnect</h2>
+      <h2 style="color:#0d9488;">PulseLink</h2>
       <div style="background:#fef3c7;border:1px solid #fbbf24;border-radius:10px;padding:14px;margin:16px 0;">
         <p style="margin:0;font-weight:700;color:#92400e;">⏳ Booking Under Review</p>
         <p style="margin:4px 0 0;font-size:13px;color:#78350f;">Please wait for your doctor's response.</p>
@@ -246,12 +246,12 @@ def _send_appointment_confirmed_email(appointment) -> None:
         f"Type: {apt_type_label}\n"
         f"Reference: {ref_number}\n\n"
         f"View: {apt_url}\n\n"
-        f"— CareConnect Team"
+        f"— PulseLink Team"
     )
 
     html = f"""
     <div style="font-family:Poppins,sans-serif;max-width:540px;margin:auto;padding:32px;border:1px solid #e5e7eb;border-radius:12px;">
-      <h2 style="color:#0d9488;">CareConnect</h2>
+      <h2 style="color:#0d9488;">PulseLink</h2>
       <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:10px;padding:14px;margin:16px 0;">
         <p style="margin:0;font-weight:700;color:#15803d;">✓ Booking Confirmed!</p>
         <p style="margin:4px 0 0;font-size:13px;color:#166534;">Your booking with <strong>{doctor_name}</strong> has been confirmed.</p>
@@ -292,9 +292,26 @@ def _send_appointment_confirmed_email(appointment) -> None:
 
 def _notify(user, title, message, notif_type="appointment", data=None):
     try:
-        Notification.objects.create(
+        notif = Notification.objects.create(
             user=user, type=notif_type, title=title, message=message, data=data or {}
         )
+        try:
+            from channels.layers import get_channel_layer
+            from asgiref.sync import async_to_sync
+            async_to_sync(get_channel_layer().group_send)(
+                f"notifications_{user.pk}",
+                {
+                    "type":       "notify",
+                    "id":         notif.pk,
+                    "notif_type": notif_type,
+                    "title":      title,
+                    "message":    message,
+                    "data":       data or {},
+                    "created_at": notif.created_at.isoformat(),
+                },
+            )
+        except Exception as ws_exc:
+            logger.warning("Notification WS push failed: %s", ws_exc)
     except Exception as exc:
         logger.warning("Notification creation failed: %s", exc)
 
@@ -383,7 +400,7 @@ def _issue_paymongo_refund(payment_id: str, amount) -> tuple[bool, str | None]:
                         "amount":     amount_centavos,
                         "payment_id": payment_id,
                         "reason":     "requested_by_customer",
-                        "notes":      "CareConnect cancellation refund",
+                        "notes":      "PulseLink cancellation refund",
                     }
                 }
             },
@@ -637,7 +654,10 @@ class AppointmentViewSet(viewsets.ViewSet):
                 send_patient_payment_receipt.delay(appointment.pk)
                 send_doctor_payment_notification.delay(appointment.pk)
             except Exception as exc:
-                logger.warning("Payment notification tasks failed for apt #%s: %s", appointment.pk, exc)
+                logger.warning("Payment notification tasks failed for apt #%s: %s — falling back to thread", appointment.pk, exc)
+                from notifications.tasks import send_patient_payment_receipt as _receipt, send_doctor_payment_notification as _docnotif
+                threading.Thread(target=_receipt, args=(appointment.pk,), daemon=True).start()
+                threading.Thread(target=_docnotif, args=(appointment.pk,), daemon=True).start()
 
         return Response(AppointmentDetailSerializer(appointment).data, status=status.HTTP_201_CREATED)
 
@@ -697,7 +717,10 @@ class AppointmentViewSet(viewsets.ViewSet):
             send_patient_payment_receipt.delay(apt.pk)
             send_doctor_payment_notification.delay(apt.pk)
         except Exception as exc:
-            logger.warning("Payment notification tasks failed for apt #%s: %s", apt.pk, exc)
+            logger.warning("Payment notification tasks failed for apt #%s: %s — falling back to thread", apt.pk, exc)
+            from notifications.tasks import send_patient_payment_receipt as _receipt, send_doctor_payment_notification as _docnotif
+            threading.Thread(target=_receipt, args=(apt.pk,), daemon=True).start()
+            threading.Thread(target=_docnotif, args=(apt.pk,), daemon=True).start()
 
         return Response(AppointmentDetailSerializer(apt).data)
 
@@ -730,12 +753,14 @@ class AppointmentViewSet(viewsets.ViewSet):
             data={"appointment_id": apt.pk, "video_link": apt.video_link},
         )
 
-        # Send "Your booking with Dr. X has been confirmed" email
-        threading.Thread(
-            target=_send_appointment_confirmed_email,
-            args=(apt,),
-            daemon=True,
-        ).start()
+        # Use Celery task (has patient_profile details + profile email CC).
+        # Falls back to threading if Celery/Redis is unavailable.
+        try:
+            from notifications.tasks import send_appointment_confirmed_email as _confirmed_task
+            _confirmed_task.delay(apt.pk)
+        except Exception as exc:
+            logger.warning("send_appointment_confirmed_email task failed for apt #%s: %s — falling back to thread", apt.pk, exc)
+            threading.Thread(target=_send_appointment_confirmed_email, args=(apt,), daemon=True).start()
 
         return Response(AppointmentDetailSerializer(apt).data)
 
@@ -1635,6 +1660,117 @@ class AppointmentViewSet(viewsets.ViewSet):
         )
         return Response(ReviewSerializer(review).data)
 
+    # RESCHEDULE (patient only — pending appointments, min 24h before, same doctor)
+    @action(detail=True, methods=["post"], url_path="reschedule")
+    def reschedule(self, request, pk=None):
+        """
+        Patient reschedules a pending appointment to a new date/time.
+        Restrictions:
+          - Only pending status (confirmed requires messaging doctor)
+          - Only online/on_demand types (in_clinic managed by doctor)
+          - New date must be in the future
+          - At least 24 hours before the original appointment
+          - New slot must be available
+        """
+        apt = self._get_appointment(pk, request.user)
+        if not apt:
+            return Response({"detail": "Not found."}, status=status.HTTP_404_NOT_FOUND)
+        if not _is_patient(request.user):
+            return Response({"detail": "Only patients can reschedule."}, status=status.HTTP_403_FORBIDDEN)
+        if apt.status != "pending":
+            if apt.status == "confirmed":
+                return Response(
+                    {"detail": "This appointment is already confirmed. Please message your doctor to request rescheduling.",
+                     "action_required": "message_doctor"},
+                    status=status.HTTP_403_FORBIDDEN,
+                )
+            return Response(
+                {"detail": f"Cannot reschedule an appointment with status '{apt.status}'."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        if apt.type == "in_clinic":
+            return Response(
+                {"detail": "In-clinic appointments cannot be rescheduled online. Please contact the clinic directly."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        # 24-hour restriction
+        from datetime import datetime as dt_type
+        apt_dt = timezone.make_aware(
+            dt_type.combine(apt.date, apt.time)
+        ) if timezone.is_naive(dt_type.combine(apt.date, apt.time)) else dt_type.combine(apt.date, apt.time)
+        apt_dt = timezone.make_aware(dt_type.combine(apt.date, apt.time))
+        if (apt_dt - timezone.now()).total_seconds() < 86400:
+            return Response(
+                {"detail": "Appointments can only be rescheduled at least 24 hours before the scheduled time."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        new_date_str = (request.data.get("date") or "").strip()
+        new_time_str = (request.data.get("time") or "").strip()
+        if not new_date_str or not new_time_str:
+            return Response({"detail": "date and time are required."}, status=status.HTTP_400_BAD_REQUEST)
+
+        from datetime import date as date_type, time as time_type
+        try:
+            new_date = date_type.fromisoformat(new_date_str)
+        except ValueError:
+            return Response({"detail": "Invalid date format. Use YYYY-MM-DD."}, status=status.HTTP_400_BAD_REQUEST)
+        try:
+            new_time = time_type.fromisoformat(new_time_str)
+        except ValueError:
+            return Response({"detail": "Invalid time format. Use HH:MM."}, status=status.HTTP_400_BAD_REQUEST)
+
+        if new_date < timezone.localdate():
+            return Response({"detail": "New date must be in the future."}, status=status.HTTP_400_BAD_REQUEST)
+
+        # Check slot availability
+        slot_taken = (
+            Appointment.objects
+            .filter(doctor=apt.doctor, date=new_date, time=new_time)
+            .exclude(status__in=["cancelled", "no_show"])
+            .exclude(pk=apt.pk)
+            .exists()
+        )
+        if slot_taken:
+            return Response({"detail": "That time slot is no longer available. Please choose another."}, status=status.HTTP_400_BAD_REQUEST)
+
+        old_date = apt.date
+        old_time = apt.time
+        apt.date = new_date
+        apt.time = new_time
+        apt.save(update_fields=["date", "time", "updated_at"])
+
+        doctor_name = f"Dr. {apt.doctor.first_name} {apt.doctor.last_name}".strip()
+        _notify(
+            apt.doctor,
+            title="Appointment Rescheduled",
+            message=(
+                f"{request.user.first_name} {request.user.last_name} rescheduled their appointment "
+                f"from {old_date} {old_time} to {new_date} {new_time}."
+            ),
+            data={"appointment_id": apt.pk},
+        )
+        _notify(
+            apt.patient,
+            title="Appointment Rescheduled ✅",
+            message=f"Your appointment with {doctor_name} has been rescheduled to {new_date} at {new_time}.",
+            data={"appointment_id": apt.pk},
+        )
+
+        try:
+            from channels.layers import get_channel_layer
+            from asgiref.sync import async_to_sync
+            channel_layer = get_channel_layer()
+            async_to_sync(channel_layer.group_send)(
+                f"appointment_{apt.pk}",
+                {"type": "status.changed", "appointment_id": apt.pk, "status": apt.status},
+            )
+        except Exception as exc:
+            logger.warning("Reschedule WS broadcast failed: %s", exc)
+
+        return Response(AppointmentDetailSerializer(apt).data)
+
     # NO SHOW
     @action(detail=True, methods=["post"], url_path="no_show")
     def no_show(self, request, pk=None):
@@ -1912,7 +2048,7 @@ class AppointmentPaymongoWebhookView(APIView):
             existing_count = (
                 Appointment.objects
                 .select_for_update()
-                .filter(doctor=doctor, date=today)
+                .filter(doctor=doctor, date=apt_date)
                 .exclude(status__in=["cancelled", "no_show"])
                 .count()
             )
@@ -2227,3 +2363,4 @@ class MyDoctorsView(APIView):
             results.append(doc_data)
 
         return Response(results)
+

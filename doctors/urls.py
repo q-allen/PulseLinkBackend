@@ -33,6 +33,8 @@ from .views import (
     AvailabilityView,
     AvailableWeekdaysView,
     CompleteDoctorProfileView,
+    DoctorLivenessCompleteView,
+    DoctorLivenessSessionView,
     DoctorViewSet,
     DoctorEarningsView,
     InviteDoctorView,
@@ -62,6 +64,8 @@ urlpatterns = [
     # "" pattern does not swallow these named paths.
     path("availability/",       AvailabilityView.as_view(),          name="doctor-availability"),
     path("me/complete/",         CompleteDoctorProfileView.as_view(), name="doctor-profile-complete"),
+    path("me/liveness/session/", DoctorLivenessSessionView.as_view(), name="doctor-liveness-session"),
+    path("me/liveness/complete/", DoctorLivenessCompleteView.as_view(), name="doctor-liveness-complete"),
     path("slots/",               SlotListCreateView.as_view(),        name="doctor-slot-list"),
     path("slots/<int:pk>/",     SlotDetailView.as_view(),       name="doctor-slot-detail"),
     path("my-schedule/",        MyScheduleView.as_view(),       name="doctor-my-schedule"),

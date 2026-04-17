@@ -248,25 +248,27 @@ class DoctorProfile(models.Model):
         null=True,
         blank=True,
         max_length=500,
-        help_text="Front-facing liveness photo.",
-    )
-    face_left = models.ImageField(
-        upload_to="face_verification/",
-        null=True,
-        blank=True,
-        max_length=500,
-        help_text="Left-side liveness photo.",
-    )
-    face_right = models.ImageField(
-        upload_to="face_verification/",
-        null=True,
-        blank=True,
-        max_length=500,
-        help_text="Right-side liveness photo.",
+        help_text="Liveness reference photo from AWS Rekognition.",
     )
     is_face_verified = models.BooleanField(
         default=False,
         help_text="Set True after all three face photos are captured and blink detected.",
+    )
+    face_verification_status = models.CharField(
+        max_length=20,
+        choices=[
+            ("pending", "Pending"),
+            ("verified", "Verified"),
+            ("manual_review", "Manual Review"),
+            ("admin_override", "Admin Override"),
+        ],
+        default="pending",
+        help_text="Auto status for face verification; admin can override if needed.",
+    )
+    face_verification_error = models.TextField(
+        blank=True,
+        default="",
+        help_text="Last face verification error, if any.",
     )
 
     # ── Profile completion (NowServing pattern: wizard gate) ──────────────────

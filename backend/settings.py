@@ -48,7 +48,15 @@ INSTALLED_APPS = [
 ]
 
 FRONTEND_URL      = os.environ.get("FRONTEND_URL", "http://localhost:3000")
-FRONTEND_BASE_URL = os.environ.get("FRONTEND_BASE_URL", "http://localhost:3000")
+FRONTEND_BASE_URL = os.environ.get("FRONTEND_BASE_URL", FRONTEND_URL)
+
+# Local override if explicitly set (safe in prod: unset there).
+_FRONTEND_URL_LOCAL = os.environ.get("FRONTEND_URL_LOCAL")
+_FRONTEND_BASE_URL_LOCAL = os.environ.get("FRONTEND_BASE_URL_LOCAL")
+if _FRONTEND_URL_LOCAL:
+    FRONTEND_URL = _FRONTEND_URL_LOCAL
+if _FRONTEND_BASE_URL_LOCAL:
+    FRONTEND_BASE_URL = _FRONTEND_BASE_URL_LOCAL
 BACKEND_URL       = os.environ.get("BACKEND_URL", "http://localhost:8000")
 
 # ── CORS ──────────────────────────────────────────────────────────────────────
@@ -304,7 +312,7 @@ if USE_BREVO_API:
         or DEFAULT_FROM_EMAIL
         or os.environ.get("EMAIL_HOST_USER")
     )
-    BREVO_SENDER_NAME = os.environ.get("BREVO_SENDER_NAME", "CareConnect")
+    BREVO_SENDER_NAME = os.environ.get("BREVO_SENDER_NAME", "PulseLink")
 
     if not DEFAULT_FROM_EMAIL and BREVO_SENDER_EMAIL:
         DEFAULT_FROM_EMAIL = BREVO_SENDER_EMAIL
@@ -384,6 +392,15 @@ PAYMONGO_APPOINTMENT_WEBHOOK_SECRET = os.environ.get("PAYMONGO_APPOINTMENT_WEBHO
 JITSI_HOST   = os.environ.get("JITSI_HOST")
 JITSI_DOMAIN = os.environ.get("JITSI_DOMAIN")  # used by serializer for video_room_url
 
+# ── AWS Rekognition Face Liveness ────────────────────────────────────────────
+AWS_ACCESS_KEY_ID = os.environ.get("AWS_ACCESS_KEY_ID", "")
+AWS_SECRET_ACCESS_KEY = os.environ.get("AWS_SECRET_ACCESS_KEY", "")
+AWS_REGION = os.environ.get("AWS_REGION", "")
+AWS_LIVENESS_ROLE_ARN = os.environ.get("AWS_LIVENESS_ROLE_ARN", "")
+AWS_LIVENESS_EXTERNAL_ID = os.environ.get("AWS_LIVENESS_EXTERNAL_ID", "pulselink-liveness-2026")
+AWS_LIVENESS_SCORE_THRESHOLD = float(os.environ.get("AWS_LIVENESS_SCORE_THRESHOLD", "75"))
+AWS_STORAGE_BUCKET_NAME = os.environ.get("AWS_STORAGE_BUCKET_NAME", "pulselink-liveness-verification")
+
 # ── File uploads ──────────────────────────────────────────────────────────────
 FILE_UPLOAD_MAX_MEMORY_SIZE = 10 * 1024 * 1024   # 10 MB
 DATA_UPLOAD_MAX_MEMORY_SIZE = 10 * 1024 * 1024
@@ -396,14 +413,14 @@ _JAZZMIN_CHANGEFORM_OVERRIDES = {
 
 JAZZMIN_SETTINGS = {
     # ── Branding ──────────────────────────────────────────────────────────────
-    "site_title":    "CareConnect Admin",
-    "site_header":   "CareConnect",
-    "site_brand":    "CareConnect",
+    "site_title":    "PulseLink Admin",
+    "site_header":   "PulseLink",
+    "site_brand":    "PulseLink",
     "site_logo":     "icon.svg",
     "site_icon":     "icon.svg",
     "site_logo_classes": "img-circle elevation-3",
-    "welcome_sign":  "Welcome back to CareConnect Admin",
-    "copyright":     "CareConnect © 2026",
+    "welcome_sign":  "Welcome back to PulseLink Admin",
+    "copyright":     "PulseLink © 2026",
 
     # ── Search ────────────────────────────────────────────────────────────────
     "search_model": ["users.User", "appointments.Appointment", "doctors.DoctorProfile"],
@@ -419,7 +436,7 @@ JAZZMIN_SETTINGS = {
 
     # ── User menu (top-right avatar dropdown) ─────────────────────────────────
     "usermenu_links": [
-        {"name": "CareConnect App", "url": "http://localhost:3000", "new_window": True},
+        {"name": "PulseLink App", "url": "http://localhost:3000", "new_window": True},
     ],
 
     # ── Sidebar ───────────────────────────────────────────────────────────────
@@ -521,3 +538,4 @@ JAZZMIN_UI_TWEAKS = {
         "success":   "btn-success",
     },
 }
+

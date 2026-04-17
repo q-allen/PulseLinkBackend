@@ -343,7 +343,7 @@ class AppointmentDetailSerializer(serializers.ModelSerializer):
         status = obj.payment_status
         if status == "paid" and fee_display:
             return {
-                "patient": f"You paid {fee_display} for an online consultation with {doctor_name} via CareConnect.",
+                "patient": f"You paid {fee_display} for an online consultation with {doctor_name} via PulseLink.",
                 "doctor":  f"Payment of {fee_display} received from {patient_name} for their online consultation.",
                 "badge":   "paid",
                 "color":   "success",
@@ -624,3 +624,4 @@ class DoctorEarningsSummarySerializer(serializers.Serializer):
     total_gross           = serializers.DecimalField(max_digits=12, decimal_places=2)
     completed_count       = serializers.IntegerField()
     breakdown             = serializers.ListField(child=serializers.DictField())
+

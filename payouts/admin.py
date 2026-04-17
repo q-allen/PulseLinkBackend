@@ -1,7 +1,7 @@
 """
 payouts/admin.py
 
-Rich Django admin for the CareConnect payout system.
+Rich Django admin for the PulseLink payout system.
 
 Features:
   - Color-coded status badges (pending=yellow, paid=green, rejected=red)
@@ -40,7 +40,7 @@ class PayoutInline(admin.TabularInline):
 @admin.register(Payout)
 class PayoutAdmin(admin.ModelAdmin):
     """
-    Full payout management for CareConnect admins.
+    Full payout management for PulseLink admins.
 
     Workflow:
       1. Doctor submits payout request → status=pending
@@ -347,3 +347,4 @@ class PayoutAdmin(admin.ModelAdmin):
         }
 
         return super().changelist_view(request, extra_context=extra_context)
+

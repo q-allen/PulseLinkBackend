@@ -45,4 +45,5 @@ urlpatterns = [
     # Review actions (NowServing pattern)
     path("<int:pk>/review/",              appt({"post": "submit_review"}),                      name="appointment-review"),
     path("<int:pk>/review/reply/",        appt({"patch": "reply_to_review"}),                   name="appointment-review-reply"),
+    path("<int:pk>/reschedule/",          appt({"post": "reschedule"}),                         name="appointment-reschedule"),
 ]

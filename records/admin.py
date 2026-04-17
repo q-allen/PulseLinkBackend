@@ -38,7 +38,8 @@ class PrescriptionAdmin(admin.ModelAdmin):
     list_display  = ("id", "patient", "doctor", "diagnosis", "date", "valid_until", "pdf_link")
     search_fields = ("patient__email", "doctor__email", "diagnosis")
     ordering      = ("-created_at",)
-    readonly_fields = ("pdf_link",)
+    readonly_fields = ("pdf_link", "pdf_file_link")
+    exclude       = ("pdf_file",)
 
     def get_urls(self):
         return [
@@ -49,6 +50,13 @@ class PrescriptionAdmin(admin.ModelAdmin):
     def pdf_link(self, obj):
         url = f"/admin/records/prescription/{obj.pk}/pdf/"
         return format_html('<a href="{}" target="_blank">View PDF</a>', url)
+
+    @admin.display(description="PDF File")
+    def pdf_file_link(self, obj):
+        if not obj.pk:
+            return "—"
+        url = f"/admin/records/prescription/{obj.pk}/pdf/"
+        return format_html('<a href="{}" target="_blank">Download / View PDF</a>', url)
 
 
 @admin.register(LabResult)
@@ -70,7 +78,8 @@ class MedicalCertificateAdmin(admin.ModelAdmin):
     list_display  = ("id", "patient", "doctor", "purpose", "date", "valid_until", "pdf_link")
     search_fields = ("patient__email", "doctor__email")
     ordering      = ("-created_at",)
-    readonly_fields = ("created_at", "pdf_link")
+    readonly_fields = ("created_at", "pdf_link", "pdf_file_link")
+    exclude       = ("pdf_file",)
 
     def get_urls(self):
         return [
@@ -81,6 +90,13 @@ class MedicalCertificateAdmin(admin.ModelAdmin):
     def pdf_link(self, obj):
         url = f"/admin/records/medicalcertificate/{obj.pk}/pdf/"
         return format_html('<a href="{}" target="_blank">View PDF</a>', url)
+
+    @admin.display(description="PDF File")
+    def pdf_file_link(self, obj):
+        if not obj.pk:
+            return "—"
+        url = f"/admin/records/medicalcertificate/{obj.pk}/pdf/"
+        return format_html('<a href="{}" target="_blank">Download / View PDF</a>', url)
 
 
 @admin.register(CertificateRequest)

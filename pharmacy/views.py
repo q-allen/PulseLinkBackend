@@ -102,7 +102,7 @@ def _create_paymongo_checkout(order: Order, payment_method_type: str) -> dict:
                 "success_url":          f"{frontend_base}/patient/pharmacy/orders/success?ref={order.order_ref}",
                 "cancel_url":           f"{frontend_base}/patient/pharmacy/orders/cancel?ref={order.order_ref}",
                 "reference_number":     order.order_ref,
-                "description":          f"CareConnect Order {order.order_ref}",
+                "description":          f"PulseLink Order {order.order_ref}",
                 "metadata": {
                     # Stored so the webhook can look up the order without
                     # relying solely on the checkout session id.
@@ -191,16 +191,16 @@ def _send_delivery_email(order: Order) -> None:
         from django.core.mail import send_mail
         patient = order.patient
         name = f"{patient.first_name} {patient.last_name}".strip() or patient.email
-        subject = f"Your CareConnect order {order.order_ref} has been delivered!"
+        subject = f"Your PulseLink order {order.order_ref} has been delivered!"
         plain = (
             f"Hi {name},\n\n"
             f"Great news! Your order {order.order_ref} has been delivered.\n"
             f"Total: ₱{float(order.total_amount):,.2f}\n\n"
-            "Thank you for choosing CareConnect!"
+            "Thank you for choosing PulseLink!"
         )
         html = f"""
         <div style="font-family:Poppins,sans-serif;max-width:480px;margin:auto;padding:32px;border:1px solid #e5e7eb;border-radius:12px;">
-          <h2 style="color:#0d9488;margin-bottom:4px;">CareConnect</h2>
+          <h2 style="color:#0d9488;margin-bottom:4px;">PulseLink</h2>
           <p style="color:#6b7280;font-size:14px;margin-top:0;">Healthcare, made simple.</p>
           <hr style="border:none;border-top:1px solid #e5e7eb;margin:24px 0;">
           <p style="font-size:15px;color:#111827;">Hi {name},</p>
@@ -211,7 +211,7 @@ def _send_delivery_email(order: Order) -> None:
           </div>
           <p style="font-size:14px;color:#374151;">Total paid: <strong>₱{float(order.total_amount):,.2f}</strong></p>
           <hr style="border:none;border-top:1px solid #e5e7eb;margin:24px 0;">
-          <p style="font-size:12px;color:#9ca3af;text-align:center;">Thank you for choosing CareConnect!</p>
+          <p style="font-size:12px;color:#9ca3af;text-align:center;">Thank you for choosing PulseLink!</p>
         </div>
         """
         send_mail(
@@ -262,6 +262,72 @@ class PrescriptionUploadView(APIView):
     def get(self, request):
         qs = PharmacyPrescriptionUpload.objects.filter(patient=request.user)
         return Response(PrescriptionUploadSerializer(qs, many=True, context={"request": request}).data)
+
+
+class PrescriptionUploadFileView(APIView):
+    """Proxy view: fetch the uploaded prescription file from Cloudinary and stream it."""
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, pk):
+        try:
+            upload = PharmacyPrescriptionUpload.objects.get(pk=pk)
+        except PharmacyPrescriptionUpload.DoesNotExist:
+            return Response({"detail": "Not found."}, status=status.HTTP_404_NOT_FOUND)
+
+        if upload.patient != request.user and not (request.user.is_staff or getattr(request.user, "role", "") == "admin"):
+            return Response({"detail": "Forbidden."}, status=status.HTTP_403_FORBIDDEN)
+
+        stored = upload.file.name
+        import cloudinary
+        import cloudinary.api
+        import cloudinary.utils
+        cld = settings.CLOUDINARY_STORAGE
+        cloudinary.config(
+            cloud_name=cld["CLOUD_NAME"],
+            api_key=cld["API_KEY"],
+            api_secret=cld["API_SECRET"],
+        )
+
+        if stored.startswith("http"):
+            resource_type = "raw" if "/raw/upload/" in stored else "image"
+            after_upload = stored.split("/upload/")[-1]
+            parts = after_upload.split("/")
+            if parts[0].startswith("v") and parts[0][1:].isdigit():
+                parts = parts[1:]
+            public_id = "/".join(parts)
+            fmt = public_id.rsplit(".", 1)[-1] if "." in public_id.split("/")[-1] else "pdf"
+            public_id = public_id.rsplit(".", 1)[0] if "." in public_id.split("/")[-1] else public_id
+        else:
+            resource_type = None
+            fmt = "pdf"
+            for rt in ("raw", "image"):
+                try:
+                    info = cloudinary.api.resource(stored, resource_type=rt)
+                    resource_type = rt
+                    fmt = info.get("format", "pdf")
+                    break
+                except Exception:
+                    pass
+            if not resource_type:
+                return Response({"detail": "File not available."}, status=status.HTTP_404_NOT_FOUND)
+            public_id = stored
+
+        try:
+            dl_url = cloudinary.utils.private_download_url(
+                public_id, fmt, resource_type=resource_type, type="upload", attachment=True
+            )
+            r = requests.get(dl_url, timeout=15)
+            r.raise_for_status()
+        except Exception as exc:
+            logger.error("Failed to fetch prescription upload #%s: %s", pk, exc)
+            return Response({"detail": "Could not retrieve file."}, status=status.HTTP_502_BAD_GATEWAY)
+
+        content_type = r.headers.get("Content-Type", "application/octet-stream")
+        filename = public_id.split("/")[-1] + "." + fmt
+        from django.http import HttpResponse
+        file_resp = HttpResponse(r.content, content_type=content_type)
+        file_resp["Content-Disposition"] = f'inline; filename="{filename}"'
+        return file_resp
 
 
 # ── Medicine views ────────────────────────────────────────────────────────────
@@ -874,3 +940,4 @@ def _safe_json(response: requests.Response):
         return response.json()
     except Exception:
         return {"raw": response.text[:500]}
+

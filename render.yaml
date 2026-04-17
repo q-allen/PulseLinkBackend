@@ -1,6 +1,6 @@
 services:
   - type: web
-    name: careconnect-backend
+    name: PulseLink-backend
     runtime: python
     buildCommand: pip install -r requirements.txt && python manage.py collectstatic --noinput --clear && python manage.py migrate
     startCommand: gunicorn backend.wsgi:application --bind 0.0.0.0:$PORT
@@ -12,3 +12,4 @@ services:
         value: True
       - key: PYTHON_VERSION
         value: 3.11.0
+

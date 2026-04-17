@@ -3,11 +3,11 @@ from django.conf import settings
 
 
 def send_otp_email(email: str, otp: str, purpose: str = "verify your email") -> None:
-    subject = "Your CareConnect verification code"
+    subject = "Your PulseLink verification code"
     plain = f"Your OTP to {purpose} is: {otp}\n\nThis code expires in 10 minutes. Do not share it with anyone."
     html = f"""
     <div style="font-family:Poppins,sans-serif;max-width:480px;margin:auto;padding:32px;border:1px solid #e5e7eb;border-radius:12px;">
-      <h2 style="color:#0d9488;margin-bottom:4px;">CareConnect</h2>
+      <h2 style="color:#0d9488;margin-bottom:4px;">PulseLink</h2>
       <p style="color:#6b7280;font-size:14px;margin-top:0;">Healthcare, made simple.</p>
       <hr style="border:none;border-top:1px solid #e5e7eb;margin:24px 0;">
       <p style="font-size:15px;color:#111827;">We're happy to help! Use the code below to {purpose}:</p>
@@ -27,3 +27,4 @@ def send_otp_email(email: str, otp: str, purpose: str = "verify your email") -> 
         html_message=html,
         fail_silently=False,
     )
+

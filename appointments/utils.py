@@ -12,7 +12,7 @@ from django.conf import settings
 JITSI_HOST = getattr(settings, "JITSI_HOST", "https://meet.jit.si")
 
 
-def create_jitsi_room(prefix: str = "careconnect") -> tuple[str, str]:
+def create_jitsi_room(prefix: str = "PulseLink") -> tuple[str, str]:
     """
     Generate a unique Jitsi room.
     Returns (room_id, video_link).
@@ -37,3 +37,4 @@ def jitsi_iframe_html(room_id: str, width: str = "100%", height: str = "600px") 
         f'allow="camera; microphone; fullscreen; display-capture" '
         f'style="border:0;"></iframe>'
     )
+

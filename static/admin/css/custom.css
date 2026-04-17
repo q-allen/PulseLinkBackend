@@ -1,4 +1,4 @@
-/* ── CareConnect Admin — Custom CSS ─────────────────────────────────────── */
+/* ── PulseLink Admin — Custom CSS ─────────────────────────────────────── */
 
 /* Google Font */
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
@@ -885,3 +885,4 @@ body.dark-mode .main-footer {
 body.dark-mode .paginator { color: #64748b !important; }
 [data-bs-theme="dark"] .badge-inactive,
 body.dark-mode .badge-inactive { background: #1e293b !important; color: #94a3b8 !important; }
+

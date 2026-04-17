@@ -1,7 +1,7 @@
 """
 payouts/views.py
 
-Payout request system for CareConnect.
+Payout request system for PulseLink.
 
 Endpoints:
   GET    /payouts/                    → doctor: own payout history | admin: all payouts
@@ -460,3 +460,4 @@ class AdminRevenueDashboardView(APIView):
 def models_q(**kwargs):
     from django.db.models import Q
     return Q(**kwargs)
+

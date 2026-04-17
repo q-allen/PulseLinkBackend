@@ -66,7 +66,7 @@ def _build_certificate_pdf_bytes(cert) -> bytes:
 
     story = []
     header_tbl = Table([[
-        Paragraph(f"<b>CareConnect · Medical Certificate</b><br/><font size='14'><b>{doctor_name}</b></font><br/>{specialty + (f' · {clinic_name}' if clinic_name else '')}", sub_s),
+        Paragraph(f"<b>PulseLink · Medical Certificate</b><br/><font size='14'><b>{doctor_name}</b></font><br/>{specialty + (f' · {clinic_name}' if clinic_name else '')}", sub_s),
         Paragraph(f"Certificate No.<br/><font size='13' color='#0f766e'><b>CERT-{cert.pk:06d}</b></font><br/>Date: {apt_date}", right_s),
     ]], colWidths=[110*mm, 55*mm])
     header_tbl.setStyle(TableStyle([("VALIGN",(0,0),(-1,-1),"TOP"),("LINEBELOW",(0,0),(-1,0),1.5,TEAL),("BOTTOMPADDING",(0,0),(-1,0),8)]))
@@ -93,8 +93,52 @@ def _build_certificate_pdf_bytes(cert) -> bytes:
     story += [cert_tbl, Spacer(1, 14)]
 
     creds = " · ".join(filter(None, [f"PRC: {prc}" if prc else "", f"PTR: {ptr}" if ptr else ""]))
-    sig_tbl = Table([[Paragraph(f"<b>{doctor_name}</b><br/><font size='8' color='#6b7280'>{creds or 'Digitally signed via CareConnect'}</font>", body_s), Paragraph("Digitally verified certificate<br/>issued via CareConnect", footer_s)]], colWidths=[100*mm, 65*mm])
-    sig_tbl.setStyle(TableStyle([("VALIGN",(0,0),(-1,-1),"BOTTOM"),("ALIGN",(1,0),(1,0),"CENTER")]))
+
+    sig_image = None
+    if doctor_profile and doctor_profile.signature:
+        try:
+            from reportlab.platypus import Image as RLImage
+            import io as _io
+            sig_field = doctor_profile.signature
+            try:
+                sig_url = sig_field.url
+            except Exception:
+                sig_url = sig_field.name if hasattr(sig_field, 'name') else str(sig_field)
+            if sig_url.startswith('http'):
+                import urllib.request as _urlreq
+                req = _urlreq.Request(sig_url, headers={'User-Agent': 'PulseLink/1.0'})
+                with _urlreq.urlopen(req, timeout=8) as resp:
+                    sig_bytes = resp.read()
+                sig_image = RLImage(_io.BytesIO(sig_bytes), width=110, height=44, kind='bound')
+            else:
+                from django.conf import settings as _settings
+                import os as _os
+                local_path = _os.path.join(_settings.MEDIA_ROOT, sig_url.lstrip('/'))
+                if _os.path.exists(local_path):
+                    sig_image = RLImage(local_path, width=110, height=44, kind='bound')
+        except Exception as sig_exc:
+            logger.warning("Could not load doctor signature for cert #%s: %s", cert.pk, sig_exc)
+
+    center_s = S("center", fontSize=10, textColor=BLACK, alignment=TA_CENTER)
+    cred_s   = S("cred",   fontSize=8,  textColor=GRAY,  alignment=TA_CENTER)
+
+    sig_cell = [sig_image] if sig_image else [
+        Paragraph("<font size='8' color='#9ca3af'><i>No signature on file</i></font>", cred_s)
+    ]
+    sig_cell.append(Paragraph(f"<b>{doctor_name}</b>", center_s))
+    sig_cell.append(Paragraph(creds or "Digitally signed via PulseLink", cred_s))
+
+    inner = Table([[item] for item in sig_cell], colWidths=[90*mm])
+    inner.setStyle(TableStyle([
+        ("ALIGN",         (0, 0), (-1, -1), "CENTER"),
+        ("VALIGN",        (0, 0), (-1, -1), "BOTTOM"),
+        ("LINEABOVE",     (0, 1), (0,  1),  0.75, colors.HexColor("#111827")),
+        ("TOPPADDING",    (0, 1), (0,  1),  4),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 2),
+    ]))
+
+    sig_tbl = Table([[inner, Paragraph("Digitally verified certificate<br/>issued via PulseLink", footer_s)]], colWidths=[100*mm, 65*mm])
+    sig_tbl.setStyle(TableStyle([("VALIGN", (0,0), (-1,-1), "BOTTOM"), ("ALIGN", (1,0), (1,0), "CENTER")]))
     story += [sig_tbl, Spacer(1, 8), Paragraph("This medical certificate is valid when verified by the issuing physician.", footer_s)]
 
     doc.build(story)
@@ -120,3 +164,4 @@ def generate_certificate_pdf(cert, request=None) -> bool:
     except Exception as exc:
         logger.error("PDF generation error for certificate #%s: %s", cert.pk, exc)
         return False
+

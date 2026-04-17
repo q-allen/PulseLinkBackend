@@ -47,7 +47,7 @@ def send_appointment_reminders(self):
             logger.info("24h reminder sent for appointment #%s", apt.pk)
 
 def _send_reminder_email(apt, hours: int):
-    subject = f"CareConnect Reminder: Appointment in {hours} hour{'s' if hours > 1 else ''}"
+    subject = f"PulseLink Reminder: Appointment in {hours} hour{'s' if hours > 1 else ''}"
     plain = (
         f"Hi {apt.patient.first_name},\n\n"
         f"This is a reminder that you have an appointment with "
@@ -57,12 +57,12 @@ def _send_reminder_email(apt, hours: int):
     )
     if apt.video_link:
         plain += f"Join video: {apt.video_link}\n"
-    plain += "\nCareConnect — Healthcare, made simple."
+    plain += "\nPulseLink — Healthcare, made simple."
 
     html = f"""
     <div style="font-family:Poppins,sans-serif;max-width:520px;margin:auto;padding:32px;
                 border:1px solid #e5e7eb;border-radius:12px;">
-      <h2 style="color:#0d9488;margin-bottom:4px;">CareConnect</h2>
+      <h2 style="color:#0d9488;margin-bottom:4px;">PulseLink</h2>
       <p style="color:#6b7280;font-size:14px;margin-top:0;">Healthcare, made simple.</p>
       <hr style="border:none;border-top:1px solid #e5e7eb;margin:20px 0;">
       <p style="font-size:15px;color:#111827;">Hi <strong>{apt.patient.first_name}</strong>,</p>
@@ -74,7 +74,7 @@ def _send_reminder_email(apt, hours: int):
         <li><strong>Type:</strong> {apt.get_type_display()}</li>
       </ul>
       {"<div style='text-align:center;margin:24px 0;'><a href='" + apt.video_link + "' style='background:#0d9488;color:#fff;padding:12px 28px;border-radius:8px;text-decoration:none;font-weight:600;'>Join Video Consult</a></div>" if apt.video_link else ""}
-      <p style="font-size:12px;color:#9ca3af;text-align:center;margin-top:24px;">CareConnect &mdash; Healthcare, made simple.</p>
+      <p style="font-size:12px;color:#9ca3af;text-align:center;margin-top:24px;">PulseLink &mdash; Healthcare, made simple.</p>
     </div>
     """
     try:
@@ -97,5 +97,6 @@ def _send_reminder_email(apt, hours: int):
 #         "apikey": settings.SEMAPHORE_API_KEY,
 #         "number": phone,
 #         "message": message,
-#         "sendername": "CareConnect",
+#         "sendername": "PulseLink",
 #     }, timeout=10)
+

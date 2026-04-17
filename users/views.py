@@ -117,7 +117,7 @@ class RegisterView(APIView):
                 "last_name": user.last_name,
                 "role": user.role,
             },
-            "message": "Account created successfully! Welcome to CareConnect."
+            "message": "Account created successfully! Welcome to PulseLink."
         }
         response = Response(data, status=status.HTTP_201_CREATED)
         _set_auth_cookies(response, refresh)
@@ -476,3 +476,4 @@ class FamilyMemberDetailView(APIView):
             return Response({"detail": "Not found."}, status=status.HTTP_404_NOT_FOUND)
         member.delete()
         return Response(status=status.HTTP_204_NO_CONTENT)
+

@@ -116,12 +116,12 @@ def send_follow_up_invitation_notification(self, invitation_id: int):
         f"Tap the link below to view the invitation and proceed to booking:\n"
         f"{invitation_url}\n\n"
         f"This is a suggested date — you can choose a different time slot when booking.\n\n"
-        f"— The CareConnect Team"
+        f"— The PulseLink Team"
     )
 
     html = f"""
     <div style="font-family:Poppins,sans-serif;max-width:540px;margin:auto;padding:32px;border:1px solid #e5e7eb;border-radius:12px;background:#ffffff;">
-      <h2 style="color:#0d9488;margin-bottom:2px;">CareConnect</h2>
+      <h2 style="color:#0d9488;margin-bottom:2px;">PulseLink</h2>
       <p style="color:#6b7280;font-size:13px;margin-top:0;">Healthcare, made simple.</p>
       <hr style="border:none;border-top:1px solid #e5e7eb;margin:18px 0;">
       <div style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:10px;padding:16px 18px;margin-bottom:20px;">
@@ -162,7 +162,7 @@ def send_follow_up_invitation_notification(self, invitation_id: int):
       <div style="text-align:center;margin:24px 0;">
         <a href="{invitation_url}" style="background:#0d9488;color:#fff;padding:13px 32px;border-radius:8px;text-decoration:none;font-weight:700;font-size:15px;">View Invitation &amp; Book</a>
       </div>
-      <p style="font-size:12px;color:#9ca3af;text-align:center;margin-top:24px;">CareConnect &mdash; Healthcare, made simple.</p>
+      <p style="font-size:12px;color:#9ca3af;text-align:center;margin-top:24px;">PulseLink &mdash; Healthcare, made simple.</p>
     </div>
     """
 
@@ -278,20 +278,20 @@ def send_verification_complete_email(self, doctor_profile_id: int):
 
     plain = (
         f"Hi {doctor_name},\n\n"
-        f"Great news! Your CareConnect profile has been verified by our admin team.\n\n"
+        f"Great news! Your PulseLink profile has been verified by our admin team.\n\n"
         f"You can now:\n"
         f"  • Appear in patient search results\n"
         f"  • Accept appointment bookings\n"
         f"  • Enable on-demand consultations\n\n"
         f"Log in to your dashboard to get started:\n"
         f"{dashboard_url}\n\n"
-        f"Welcome to CareConnect!\n"
-        f"— The CareConnect Team"
+        f"Welcome to PulseLink!\n"
+        f"— The PulseLink Team"
     )
     html = f"""
     <div style="font-family:Poppins,sans-serif;max-width:520px;margin:auto;padding:32px;
                 border:1px solid #e5e7eb;border-radius:12px;">
-      <h2 style="color:#0d9488;margin-bottom:4px;">CareConnect</h2>
+      <h2 style="color:#0d9488;margin-bottom:4px;">PulseLink</h2>
       <p style="color:#6b7280;font-size:14px;margin-top:0;">Healthcare, made simple.</p>
       <hr style="border:none;border-top:1px solid #e5e7eb;margin:20px 0;">
       <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;padding:16px;margin-bottom:20px;">
@@ -299,7 +299,7 @@ def send_verification_complete_email(self, doctor_profile_id: int):
       </div>
       <p style="font-size:15px;color:#111827;">Hi <strong>{doctor_name}</strong>,</p>
       <p style="font-size:14px;color:#374151;">
-        Your CareConnect profile has been <strong>verified</strong> by our admin team.
+        Your PulseLink profile has been <strong>verified</strong> by our admin team.
         You are now visible to patients and can start accepting appointments.
       </p>
       <ul style="font-size:14px;color:#374151;line-height:1.8;">
@@ -314,7 +314,7 @@ def send_verification_complete_email(self, doctor_profile_id: int):
           Go to My Dashboard
         </a>
       </div>
-      <p style="font-size:12px;color:#9ca3af;text-align:center;">CareConnect &mdash; Healthcare, made simple.</p>
+      <p style="font-size:12px;color:#9ca3af;text-align:center;">PulseLink &mdash; Healthcare, made simple.</p>
     </div>
     """
 
@@ -331,7 +331,7 @@ def send_verification_complete_email(self, doctor_profile_id: int):
     try:
         from django.core.mail import send_mail as _send
         _send(
-            subject="Your CareConnect Profile is Now Verified!",
+            subject="Your PulseLink Profile is Now Verified!",
             message=plain,
             from_email=settings.DEFAULT_FROM_EMAIL,
             recipient_list=[user.email],
@@ -390,13 +390,13 @@ def send_new_message_notification(self, message_id: int, recipient_id: int):
 
     # Email notification
     _send_email(
-        subject=f"CareConnect: New message from {sender_name}",
+        subject=f"PulseLink: New message from {sender_name}",
         message=(
             f"Hi {recipient.first_name},\n\n"
             f"{sender_name} sent you a message:\n"
             f"  {preview}\n\n"
-            f"Open CareConnect to reply.\n\n"
-            f"— The CareConnect Team"
+            f"Open PulseLink to reply.\n\n"
+            f"— The PulseLink Team"
         ),
         to_email=recipient.email,
     )
@@ -405,7 +405,7 @@ def send_new_message_notification(self, message_id: int, recipient_id: int):
 @shared_task(bind=True, max_retries=3, default_retry_delay=60)
 def send_patient_payment_receipt(self, appointment_id: int):
     """
-    Send receipt email to CareConnect account holder with "Under Review" message.
+    Send receipt email to PulseLink account holder with "Under Review" message.
     Includes patient details (booked_for info if applicable).
     """
     from appointments.models import Appointment
@@ -470,12 +470,12 @@ def send_patient_payment_receipt(self, appointment_id: int):
         f"Amount Paid: {fee_display}\n"
         f"Reference: {ref_number}\n\n"
         f"View: {apt_url}\n\n"
-        f"— CareConnect Team"
+        f"— PulseLink Team"
     )
 
     html = f"""
     <div style="font-family:Poppins,sans-serif;max-width:540px;margin:auto;padding:32px;border:1px solid #e5e7eb;border-radius:12px;">
-      <h2 style="color:#0d9488;">CareConnect</h2>
+      <h2 style="color:#0d9488;">PulseLink</h2>
       <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:10px;padding:14px;margin:16px 0;">
         <p style="margin:0;font-weight:700;color:#15803d;">✓ Payment Received</p>
         <p style="margin:4px 0 0;font-size:13px;color:#166534;">Your payment of <strong>{fee_display}</strong> has been processed.</p>
@@ -587,13 +587,13 @@ def send_doctor_payment_notification(self, appointment_id: int):
         f"Amount    : {fee_display}\n"
         f"Reference : {ref_number}\n\n"
         f"View appointment: {apt_url}\n\n"
-        f"--- The CareConnect Team"
+        f"--- The PulseLink Team"
     )
 
     html = f"""
     <div style="font-family:Poppins,sans-serif;max-width:540px;margin:auto;padding:32px;
                 border:1px solid #e5e7eb;border-radius:12px;background:#ffffff;">
-      <h2 style="color:#0d9488;margin-bottom:2px;">CareConnect</h2>
+      <h2 style="color:#0d9488;margin-bottom:2px;">PulseLink</h2>
       <p style="color:#6b7280;font-size:13px;margin-top:0;">Healthcare, made simple.</p>
       <hr style="border:none;border-top:1px solid #e5e7eb;margin:18px 0;">
       <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:10px;padding:14px 18px;margin-bottom:20px;">
@@ -634,7 +634,7 @@ def send_doctor_payment_notification(self, appointment_id: int):
            text-decoration:none;font-weight:600;font-size:14px;">View Appointment</a>
       </div>
       <p style="font-size:12px;color:#9ca3af;text-align:center;margin-top:24px;">
-        CareConnect &mdash; Healthcare, made simple.
+        PulseLink &mdash; Healthcare, made simple.
       </p>
     </div>
     """
@@ -753,13 +753,13 @@ def send_appointment_cancelled_email(self, appointment_id: int, refund_issued: b
         f"  Date: {date_str}\n"
         f"  Time: {time_str}\n"
         f"  Reference: {ref_number}{reason_line}{refund_block_plain}\n\n"
-        f"You can book a new appointment at any time through your CareConnect account.\n\n"
-        f"— The CareConnect Team"
+        f"You can book a new appointment at any time through your PulseLink account.\n\n"
+        f"— The PulseLink Team"
     )
 
     html = f"""
     <div style="font-family:Poppins,sans-serif;max-width:540px;margin:auto;padding:32px;border:1px solid #e5e7eb;border-radius:12px;">
-      <h2 style="color:#0d9488;margin-bottom:4px;">CareConnect</h2>
+      <h2 style="color:#0d9488;margin-bottom:4px;">PulseLink</h2>
       <p style="color:#6b7280;font-size:13px;margin-top:0;">Healthcare, made simple.</p>
       <hr style="border:none;border-top:1px solid #e5e7eb;margin:20px 0;">
       <div style="background:#fef2f2;border:1px solid #fecaca;border-radius:10px;padding:14px;margin-bottom:20px;">
@@ -782,12 +782,12 @@ def send_appointment_cancelled_email(self, appointment_id: int, refund_issued: b
       </div>
       {refund_block_html}
       <p style="font-size:13px;color:#6b7280;margin-top:20px;">
-        You can book a new appointment at any time through your CareConnect account.
+        You can book a new appointment at any time through your PulseLink account.
       </p>
       <div style="text-align:center;margin:24px 0;">
         <a href="{frontend_url}/patient/appointments" style="background:#0d9488;color:#fff;padding:11px 28px;border-radius:8px;text-decoration:none;font-weight:600;font-size:14px;">View My Appointments</a>
       </div>
-      <p style="font-size:12px;color:#9ca3af;text-align:center;margin-top:24px;">CareConnect — Healthcare, made simple.</p>
+      <p style="font-size:12px;color:#9ca3af;text-align:center;margin-top:24px;">PulseLink — Healthcare, made simple.</p>
     </div>
     """
 
@@ -874,12 +874,12 @@ def send_doctor_cancellation_notification(self, appointment_id: int, reason: str
         f"  Time: {time_str}\n"
         f"  Reference: {ref_number}{reason_line}{refund_line}\n\n"
         f"View appointment: {apt_url}\n\n"
-        f"— The CareConnect Team"
+        f"— The PulseLink Team"
     )
 
     html = f"""
     <div style="font-family:Poppins,sans-serif;max-width:540px;margin:auto;padding:32px;border:1px solid #e5e7eb;border-radius:12px;">
-      <h2 style="color:#0d9488;margin-bottom:4px;">CareConnect</h2>
+      <h2 style="color:#0d9488;margin-bottom:4px;">PulseLink</h2>
       <p style="color:#6b7280;font-size:13px;margin-top:0;">Healthcare, made simple.</p>
       <hr style="border:none;border-top:1px solid #e5e7eb;margin:20px 0;">
       <div style="background:#fef2f2;border:1px solid #fecaca;border-radius:10px;padding:14px;margin-bottom:20px;">
@@ -903,7 +903,7 @@ def send_doctor_cancellation_notification(self, appointment_id: int, reason: str
       <div style="text-align:center;margin:24px 0;">
         <a href="{apt_url}" style="background:#0d9488;color:#fff;padding:11px 28px;border-radius:8px;text-decoration:none;font-weight:600;font-size:14px;">View Appointment</a>
       </div>
-      <p style="font-size:12px;color:#9ca3af;text-align:center;margin-top:24px;">CareConnect — Healthcare, made simple.</p>
+      <p style="font-size:12px;color:#9ca3af;text-align:center;margin-top:24px;">PulseLink — Healthcare, made simple.</p>
     </div>
     """
 
@@ -953,13 +953,19 @@ def process_preconsult_reminders(self):
                 message=f"Your appointment with Dr. {apt.doctor.last_name} is in 1 hour.",
                 data={"appointment_id": apt.pk},
             )
+            _notify(
+                apt.doctor,
+                title="Upcoming Appointment (1 hour)",
+                message=f"You have an appointment with {apt.patient.first_name} {apt.patient.last_name} in 1 hour.",
+                data={"appointment_id": apt.pk},
+            )
             _send_email(
-                subject="CareConnect Reminder: Appointment in 1 hour",
+                subject="PulseLink Reminder: Appointment in 1 hour",
                 message=(
                     f"Hi {apt.patient.first_name},\n\n"
                     f"Your appointment with Dr. {apt.doctor.first_name} {apt.doctor.last_name} "
                     f"is in 1 hour on {apt.date} at {apt.time}.\n\n"
-                    f"CareConnect"
+                    f"PulseLink"
                 ),
                 to_email=apt.patient.email,
             )
@@ -981,13 +987,19 @@ def process_preconsult_reminders(self):
                 message=f"Your appointment with Dr. {apt.doctor.last_name} starts in 15 minutes.",
                 data={"appointment_id": apt.pk},
             )
+            _notify(
+                apt.doctor,
+                title="Upcoming Appointment (15 minutes)",
+                message=f"Your appointment with {apt.patient.first_name} {apt.patient.last_name} starts in 15 minutes.",
+                data={"appointment_id": apt.pk},
+            )
             _send_email(
-                subject="CareConnect Reminder: Appointment in 15 minutes",
+                subject="PulseLink Reminder: Appointment in 15 minutes",
                 message=(
                     f"Hi {apt.patient.first_name},\n\n"
                     f"Your appointment with Dr. {apt.doctor.first_name} {apt.doctor.last_name} "
                     f"starts in 15 minutes on {apt.date} at {apt.time}.\n\n"
-                    f"CareConnect"
+                    f"PulseLink"
                 ),
                 to_email=apt.patient.email,
             )
@@ -1126,12 +1138,12 @@ def send_appointment_confirmed_email(self, appointment_id: int):
         f"Type: {apt_type_label}\n"
         f"Reference: {ref_number}\n\n"
         f"View: {apt_url}\n\n"
-        f"— CareConnect Team"
+        f"— PulseLink Team"
     )
 
     html = f"""
     <div style="font-family:Poppins,sans-serif;max-width:540px;margin:auto;padding:32px;border:1px solid #e5e7eb;border-radius:12px;">
-      <h2 style="color:#0d9488;">CareConnect</h2>
+      <h2 style="color:#0d9488;">PulseLink</h2>
       <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:10px;padding:14px;margin:16px 0;">
         <p style="margin:0;font-weight:700;color:#15803d;">✓ Booking Confirmed!</p>
         <p style="margin:4px 0 0;font-size:13px;color:#166534;">Your booking with <strong>{doctor_name}</strong> has been confirmed.</p>
@@ -1181,3 +1193,4 @@ def send_appointment_confirmed_email(self, appointment_id: int):
     except Exception as exc:
         logger.warning("Confirmation email failed for apt #%s: %s", apt.pk, exc)
         raise self.retry(exc=exc)
+

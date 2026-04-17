@@ -198,15 +198,19 @@ class DoctorInviteAdmin(admin.ModelAdmin):
 class DoctorProfileAdmin(admin.ModelAdmin):
     list_display = (
         "full_name", "email", "specialty", "city", "prc_license",
-        "verified_badge", "invite_badge", "on_demand_badge",
+        "verified_badge", "invite_badge", "on_demand_badge", "face_verification_status",
         "last_active_at", "created_at",
     )
-    list_filter  = ("specialty", "city", "is_verified", "invite_accepted", "is_on_demand")
+    list_filter  = ("specialty", "city", "is_verified", "invite_accepted", "is_on_demand", "face_verification_status")
     search_fields = (
         "user__email", "user__first_name", "user__last_name",
         "prc_license", "clinic_name",
     )
-    readonly_fields       = ("created_at", "updated_at", "invite_accepted", "last_active_at", "profile_photo_preview", "prc_card_preview", "signature_preview", "face_verification_preview")
+    readonly_fields       = (
+        "created_at", "updated_at", "invite_accepted", "last_active_at",
+        "profile_photo_preview", "prc_card_preview", "signature_preview",
+        "face_verification_preview", "face_verification_status", "face_verification_error",
+    )
     ordering              = ("-created_at",)
     inlines               = [DoctorHospitalInline, DoctorServiceInline, DoctorHMOInline]
     list_per_page         = 25
@@ -220,7 +224,12 @@ class DoctorProfileAdmin(admin.ModelAdmin):
             "fields": ("profile_photo_preview", "profile_photo", "bio", "languages_spoken"),
         }),
         ("Verification Documents", {
-            "fields": ("prc_card_preview", "prc_card_image", "signature_preview", "signature", "face_verification_preview", "face_front", "face_left", "face_right", "is_face_verified"),
+            "fields": (
+                "prc_card_preview", "prc_card_image",
+                "signature_preview", "signature",
+                "face_verification_preview", "face_front",
+                "is_face_verified", "face_verification_status", "face_verification_error",
+            ),
         }),
         ("Location", {
             "fields": ("clinic_name", "clinic_address", "city"),
@@ -267,10 +276,6 @@ class DoctorProfileAdmin(admin.ModelAdmin):
         html_parts = []
         if obj.face_front:
             html_parts.append(f'<div><small>Front:</small><br><img src="{obj.face_front.url}" style="max-height:100px;border-radius:8px;margin:4px;" /></div>')
-        if obj.face_left:
-            html_parts.append(f'<div><small>Left:</small><br><img src="{obj.face_left.url}" style="max-height:100px;border-radius:8px;margin:4px;" /></div>')
-        if obj.face_right:
-            html_parts.append(f'<div><small>Right:</small><br><img src="{obj.face_right.url}" style="max-height:100px;border-radius:8px;margin:4px;" /></div>')
         if not html_parts:
             return "No face verification photos"
         return format_html('<div style="display:flex;gap:8px;">{}</div>', ''.join(html_parts))
@@ -309,6 +314,15 @@ class DoctorProfileAdmin(admin.ModelAdmin):
         updated = queryset.update(is_verified=True)
         self.message_user(request, f"{updated} doctor(s) marked as verified.", messages.SUCCESS)
 
+    @admin.action(description="✅ Mark face verified (admin override)")
+    def mark_face_verified_override(self, request, queryset):
+        updated = queryset.update(
+            is_face_verified=True,
+            face_verification_status="admin_override",
+            face_verification_error="",
+        )
+        self.message_user(request, f"{updated} doctor(s) face-verified via admin override.", messages.SUCCESS)
+
     @admin.action(description="📧 Resend activation email")
     def resend_invite(self, request, queryset):
         frontend_url = getattr(settings, "FRONTEND_URL", "http://localhost:3000")
@@ -335,7 +349,16 @@ class DoctorProfileAdmin(admin.ModelAdmin):
         if failed and not sent:
             self.message_user(request, "No invites were sent due to SMTP errors.", messages.ERROR)
 
-    actions = ["mark_verified", "resend_invite"]
+    actions = ["mark_verified", "mark_face_verified_override", "resend_invite"]
+
+    def save_model(self, request, obj, form, change):
+        if "is_face_verified" in form.changed_data:
+            if obj.is_face_verified:
+                obj.face_verification_status = "admin_override"
+                obj.face_verification_error = ""
+            elif obj.face_verification_status == "admin_override":
+                obj.face_verification_status = "manual_review"
+        super().save_model(request, obj, form, change)
 
 
 # ── Related model admins ──────────────────────────────────────────────────────
@@ -366,10 +389,10 @@ class DoctorHMOAdmin(admin.ModelAdmin):
 def _send_invite_email(email: str, first_name: str, invite_url: str) -> None:
     from django.core.mail import send_mail
 
-    subject = "Welcome to CareConnect – Activate Your Doctor Account"
+    subject = "Welcome to PulseLink – Activate My Account"
     plain = (
         f"Hi Dr. {first_name},\n\n"
-        f"An administrator has created a CareConnect doctor account for you.\n\n"
+        f"An administrator has created a PulseLink doctor account for you.\n\n"
         f"Click the link below to set your password and activate your account:\n"
         f"{invite_url}\n\n"
         f"This link expires in 3 days. If you did not expect this email, ignore it."
@@ -377,12 +400,12 @@ def _send_invite_email(email: str, first_name: str, invite_url: str) -> None:
     html = f"""
     <div style="font-family:Inter,Arial,sans-serif;max-width:520px;margin:auto;padding:32px;
                 border:1px solid #e5e7eb;border-radius:12px;">
-      <h2 style="color:#0d9488;margin-bottom:4px;">CareConnect</h2>
+      <h2 style="color:#0d9488;margin-bottom:4px;">PulseLink</h2>
       <p style="color:#6b7280;font-size:14px;margin-top:0;">Healthcare, made simple.</p>
       <hr style="border:none;border-top:1px solid #e5e7eb;margin:20px 0;">
       <p style="font-size:15px;color:#111827;">Hi <strong>Dr. {first_name}</strong>,</p>
       <p style="font-size:14px;color:#374151;">
-        An administrator has created a CareConnect doctor account for you.
+        An administrator has created a PulseLink doctor account for you.
         Click the button below to set your password and activate your account.
       </p>
       <div style="text-align:center;margin:28px 0;">
@@ -438,3 +461,4 @@ class PatientHMOAdmin(admin.ModelAdmin):
     def reject_cards(self, request, queryset):
         updated = queryset.filter(verification_status="pending").update(verification_status="rejected")
         self.message_user(request, f"{updated} HMO card(s) rejected.", messages.WARNING)
+

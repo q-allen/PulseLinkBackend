@@ -8,9 +8,9 @@ from django.views.generic import RedirectView
 from appointments.views import MyDoctorsView
 from doctors.views import ActivateDoctorView
 from users.urls import family_urlpatterns
-from backend.admin_site import CareConnectAdminSite
+from backend.admin_site import PulseLinkAdminSite
 
-admin.site.__class__ = CareConnectAdminSite
+admin.site.__class__ = PulseLinkAdminSite
 
 def health_check(request):
     return JsonResponse({"status": "ok"})
@@ -39,3 +39,4 @@ urlpatterns = [
 if settings.DEBUG:
     urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
     urlpatterns += static(settings.STATIC_URL, document_root=settings.BASE_DIR / "static")
+
