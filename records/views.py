@@ -671,26 +671,44 @@ class LabResultDetailView(APIView):
         lab = self._get(pk, request.user)
         if not lab:
             return Response({"detail": "Not found."}, status=status.HTTP_404_NOT_FOUND)
-        if not _is_doctor(request.user):
-            return Response({"detail": "Only doctors can update lab results."}, status=status.HTTP_403_FORBIDDEN)
+
+        # Allow both doctor and patient to upload files
+        is_patient = request.user == lab.patient
+        is_doctor = request.user == lab.doctor
 
         if "file" in request.FILES:
             lab.file = request.FILES["file"]
-        if "results" in request.data:
-            import json
-            lab.results = json.loads(request.data["results"])
-        if "notes" in request.data:
-            lab.notes = request.data["notes"]
-        if "status" in request.data:
-            lab.status = request.data["status"]
+            # Auto-complete when patient uploads result
+            if is_patient and lab.status == "pending":
+                lab.status = "completed"
+
+        # Only doctor can update results/notes/status directly
+        if is_doctor:
+            if "results" in request.data:
+                import json
+                lab.results = json.loads(request.data["results"]) if isinstance(request.data["results"], str) else request.data["results"]
+            if "notes" in request.data:
+                lab.notes = request.data["notes"]
+            if "status" in request.data:
+                lab.status = request.data["status"]
+
         lab.save()
 
+        # Notify based on who updated
         if lab.status == "completed":
-            Notification.objects.create(
-                user=lab.patient, type="lab_result", title="Lab Results Ready",
-                message=f"Your {lab.test_name} results are now available.",
-                data={"lab_result_id": lab.pk},
-            )
+            if is_doctor:
+                Notification.objects.create(
+                    user=lab.patient, type="lab_result", title="Lab Results Ready",
+                    message=f"Your {lab.test_name} results are now available.",
+                    data={"lab_result_id": lab.pk},
+                )
+            elif is_patient:
+                Notification.objects.create(
+                    user=lab.doctor, type="lab_result", title="Patient Uploaded Lab Results",
+                    message=f"{lab.patient.first_name} {lab.patient.last_name} uploaded results for {lab.test_name}.",
+                    data={"lab_result_id": lab.pk},
+                )
+
         return Response(LabResultSerializer(lab, context={"request": request}).data)
 
 
