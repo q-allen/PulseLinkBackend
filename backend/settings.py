@@ -16,7 +16,11 @@ if not SECRET_KEY:
     if not DEBUG:
         raise RuntimeError("SECRET_KEY must be set in production.")
     SECRET_KEY = "dev-only-insecure-secret-key-do-not-use-in-production"  # noqa: S105
-ALLOWED_HOSTS = [h.strip() for h in os.environ.get("ALLOWED_HOSTS", "localhost,127.0.0.1").split(",") if h.strip()]
+ALLOWED_HOSTS = [
+    h.strip().replace("https://", "").replace("http://", "").rstrip("/")
+    for h in os.environ.get("ALLOWED_HOSTS", "localhost,127.0.0.1").split(",")
+    if h.strip()
+]
 
 # ── Installed Apps ────────────────────────────────────────────────────────────
 INSTALLED_APPS = [
