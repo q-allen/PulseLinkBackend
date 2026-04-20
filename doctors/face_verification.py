@@ -1,111 +1,68 @@
 """
 doctors/face_verification.py
 
-Automated face verification using face detection and comparison.
-Verifies that all three face photos (front, left, right) contain the same person,
+Face verification using AWS Rekognition (replaces local face_recognition/dlib).
+Verifies that all three face photos contain the same person,
 and optionally verifies they match the face on the PRC card image.
 """
 
-import io
 from typing import Tuple, Optional
-from PIL import Image
-import face_recognition
-import numpy as np
+from .aws_liveness import compare_face_to_prc, _get_rekognition_client
+from botocore.exceptions import ClientError
+
+
+def _read_image_bytes(image_field) -> bytes:
+    if hasattr(image_field, 'read'):
+        image_field.seek(0)
+        return image_field.read()
+    with open(image_field.path, 'rb') as f:
+        return f.read()
+
+
+def _compare_two_faces(source_bytes: bytes, target_bytes: bytes, threshold: float = 80.0) -> bool:
+    client = _get_rekognition_client()
+    try:
+        response = client.compare_faces(
+            SourceImage={"Bytes": source_bytes},
+            TargetImage={"Bytes": target_bytes},
+            SimilarityThreshold=threshold,
+        )
+        matches = response.get("FaceMatches") or []
+        return len(matches) > 0 and matches[0].get("Similarity", 0) >= threshold
+    except ClientError as e:
+        code = e.response.get("Error", {}).get("Code", "")
+        if code == "InvalidParameterException":
+            return False  # No face detected
+        raise
 
 
 def verify_face_photos(face_front, face_left, face_right, prc_card_image: Optional[object] = None) -> Tuple[bool, str]:
     """
-    Automatically verify that all three face photos contain faces and match the same person.
-    
-    Args:
-        face_front: ImageField or file object for front-facing photo
-        face_left: ImageField or file object for left-side photo
-        face_right: ImageField or file object for right-side photo
-    
-    Returns:
-        Tuple of (is_verified: bool, message: str)
+    Verify that all three face photos contain faces and match the same person
+    using AWS Rekognition CompareFaces.
     """
     try:
-        # Load images
-        front_img = _load_image(face_front)
-        left_img = _load_image(face_left)
-        right_img = _load_image(face_right)
+        front_bytes = _read_image_bytes(face_front)
+        left_bytes = _read_image_bytes(face_left)
+        right_bytes = _read_image_bytes(face_right)
 
-        # Get a single face encoding per photo
-        front_encoding = _single_face_encoding(front_img, "front photo")
-        left_encoding = _single_face_encoding(left_img, "left photo")
-        right_encoding = _single_face_encoding(right_img, "right photo")
-        
-        # Compare faces - tolerance of 0.6 is standard (lower = stricter)
-        tolerance = 0.6
-        
-        # Compare front with left
-        front_left_match = face_recognition.compare_faces(
-            [front_encoding], left_encoding, tolerance=tolerance
-        )[0]
-        
-        # Compare front with right
-        front_right_match = face_recognition.compare_faces(
-            [front_encoding], right_encoding, tolerance=tolerance
-        )[0]
-        
-        # Compare left with right
-        left_right_match = face_recognition.compare_faces(
-            [left_encoding], right_encoding, tolerance=tolerance
-        )[0]
-        
-        # All three photos must match
-        if not (front_left_match and front_right_match and left_right_match):
+        if not _compare_two_faces(front_bytes, left_bytes):
             return False, "Face photos do not match - please ensure all photos are of the same person"
 
-        # Optional: verify PRC card face matches the live photos
-        if prc_card_image is not None:
-            prc_img = _load_image(prc_card_image)
-            prc_encoding = _single_face_encoding(prc_img, "PRC card photo")
+        if not _compare_two_faces(front_bytes, right_bytes):
+            return False, "Face photos do not match - please ensure all photos are of the same person"
 
-            # Use the average encoding of the three live photos for stability
-            live_avg = np.mean([front_encoding, left_encoding, right_encoding], axis=0)
-            prc_match = face_recognition.compare_faces(
-                [live_avg], prc_encoding, tolerance=tolerance
-            )[0]
-            if not prc_match:
-                return False, "PRC card face does not match the live face photos"
-        
+        if not _compare_two_faces(left_bytes, right_bytes):
+            return False, "Face photos do not match - please ensure all photos are of the same person"
+
+        if prc_card_image is not None:
+            match, message = compare_face_to_prc(front_bytes, prc_card_image)
+            if not match:
+                return False, message
+
         return True, "Face verification successful"
-        
+
     except ValueError as e:
         return False, str(e)
     except Exception as e:
         return False, f"Face verification error: {str(e)}"
-
-
-def _load_image(image_field):
-    """Load image from Django ImageField or file object into numpy array."""
-    try:
-        # Try to read from ImageField
-        if hasattr(image_field, 'read'):
-            image_field.seek(0)
-            img_data = image_field.read()
-        else:
-            # It's already a file path or URL
-            with open(image_field.path, 'rb') as f:
-                img_data = f.read()
-        
-        # Convert to PIL Image then to numpy array
-        img = Image.open(io.BytesIO(img_data))
-        # Convert to RGB if needed
-        if img.mode != 'RGB':
-            img = img.convert('RGB')
-        return np.array(img)
-    except Exception as e:
-        raise ValueError(f"Failed to load image: {str(e)}")
-
-
-def _single_face_encoding(image, label: str):
-    """Return the single face encoding or raise a ValueError with a clear message."""
-    encodings = face_recognition.face_encodings(image)
-    if len(encodings) == 0:
-        raise ValueError(f"No face detected in {label}")
-    if len(encodings) > 1:
-        raise ValueError(f"Multiple faces detected in {label}")
-    return encodings[0]
