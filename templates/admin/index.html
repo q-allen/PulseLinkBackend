@@ -1,5 +1,6 @@
 {% extends "admin/base_site.html" %}
-{% load i18n static log %}
+{% load i18n static log jazzmin %}
+{% get_jazzmin_ui_tweaks as jazzmin_ui %}
 
 {% block bodyclass %}{{ block.super }} dashboard{% endblock %}
 {% block content_title %}Dashboard{% endblock %}
