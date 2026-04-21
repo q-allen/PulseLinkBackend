@@ -325,6 +325,15 @@ class CompleteProfileView(APIView):
         return Response(data, status=status.HTTP_200_OK)
 
 
+class WsTokenView(APIView):
+    """GET /api/auth/ws-token — returns the access token for WebSocket ?token= auth."""
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        token = request.COOKIES.get("access_token", "")
+        return Response({"token": token}, status=status.HTTP_200_OK)
+
+
 class AvatarUploadView(APIView):
     """
     POST /api/auth/me/avatar/

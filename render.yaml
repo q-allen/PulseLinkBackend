@@ -3,7 +3,7 @@ services:
     name: PulseLink-backend
     runtime: python
     buildCommand: pip install -r requirements.txt && python manage.py collectstatic --noinput --clear && python manage.py migrate
-    startCommand: gunicorn backend.wsgi:application --bind 0.0.0.0:$PORT
+    startCommand: daphne -b 0.0.0.0 -p $PORT backend.asgi:application
     healthCheckPath: /api/health/
     envVars:
       - key: DEBUG

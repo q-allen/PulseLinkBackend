@@ -13,6 +13,7 @@ from .views import (
     RegisterView,
     ResetPasswordView,
     SendOtpView,
+    WsTokenView,
 )
 
 urlpatterns = [
@@ -26,6 +27,7 @@ urlpatterns = [
     path("me/avatar",       AvatarUploadView.as_view(),   name="me-avatar"),
     path("forgot-password", ForgotPasswordView.as_view(),  name="forgot-password"),
     path("reset-password",  ResetPasswordView.as_view(),   name="reset-password"),
+    path("ws-token",        WsTokenView.as_view(),         name="ws-token"),
 ]
 
 # Family member routes are mounted under /api/patients/ in backend/urls.py

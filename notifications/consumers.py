@@ -26,11 +26,23 @@ def _cookie_dict(scope) -> dict:
     return cookies
 
 
+def _token_from_scope(scope) -> str | None:
+    """Extract JWT from cookie first, then ?token= query param as fallback."""
+    token = _cookie_dict(scope).get("access_token")
+    if token:
+        return token
+    qs = scope.get("query_string", b"").decode()
+    for part in qs.split("&"):
+        if part.startswith("token="):
+            return part[6:]
+    return None
+
+
 @sync_to_async
 def _get_user(scope):
     from django.contrib.auth import get_user_model
     User = get_user_model()
-    token = _cookie_dict(scope).get("access_token")
+    token = _token_from_scope(scope)
     if not token:
         return None
     try:
