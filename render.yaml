@@ -2,7 +2,6 @@ services:
   - type: web
     name: PulseLink-backend
     runtime: python
-    pythonVersion: "3.12.9"
     buildCommand: pip install -r requirements.txt && python manage.py collectstatic --noinput --clear && python manage.py migrate
     startCommand: gunicorn backend.wsgi:application --bind 0.0.0.0:$PORT
     healthCheckPath: /api/health/
