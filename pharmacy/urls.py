@@ -10,12 +10,14 @@ from .views import (
     PayMongoWebhookView,
     PrescriptionUploadView,
     PrescriptionUploadFileView,
+    PrescriptionExtractView,
 )
 
 urlpatterns = [
     path("medicines",                        MedicineListView.as_view(),           name="medicine-list"),
     path("medicines/<int:pk>",               MedicineDetailView.as_view(),         name="medicine-detail"),
     path("prescriptions/upload",             PrescriptionUploadView.as_view(),     name="prescription-upload"),
+    path("prescriptions/extract",            PrescriptionExtractView.as_view(),    name="prescription-extract"),
     path("prescriptions/upload/<int:pk>/file", PrescriptionUploadFileView.as_view(), name="prescription-upload-file"),
     path("orders",                           OrderListView.as_view(),               name="order-list"),
     path("orders/from-prescription",         OrderFromPrescriptionView.as_view(),   name="order-from-prescription"),

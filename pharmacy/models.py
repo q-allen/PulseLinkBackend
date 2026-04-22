@@ -30,7 +30,6 @@ class Order(models.Model):
         ("pending",    "Pending"),
         ("confirmed",  "Confirmed"),
         ("processing", "Processing"),
-        ("shipped",    "Shipped"),
         ("out_for_delivery", "Out for Delivery"),
         ("delivered",  "Delivered"),
         ("cancelled",  "Cancelled"),

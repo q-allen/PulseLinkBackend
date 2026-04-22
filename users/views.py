@@ -288,8 +288,8 @@ class LogoutView(APIView):
             except TokenError:
                 pass
         response = Response({"detail": "Logged out."}, status=status.HTTP_200_OK)
-        response.delete_cookie("access_token", path="/", samesite=COOKIE_SAMESITE, secure=COOKIE_SECURE)
-        response.delete_cookie("refresh_token", path="/", samesite=COOKIE_SAMESITE, secure=COOKIE_SECURE)
+        response.delete_cookie("access_token", path="/", samesite=COOKIE_SAMESITE)
+        response.delete_cookie("refresh_token", path="/", samesite=COOKIE_SAMESITE)
         return response
 
 

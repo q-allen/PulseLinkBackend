@@ -28,6 +28,9 @@ django-cloudinary-storage==0.3.0
 # PDF generation
 reportlab==4.4.10
 weasyprint==68.1
+# PDF-to-image for prescription OCR (PyMuPDF = pure Python, no poppler needed)
+PyMuPDF==1.24.14
+# pdf2image==1.17.0  # alternative if poppler is available
 # Stripe payments
 stripe==11.6.0
 # Optional: SMS via Semaphore (uncomment when needed)

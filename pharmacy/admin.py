@@ -213,24 +213,17 @@ def mark_processing(modeladmin, request, queryset):
     queryset.filter(status__in=["pending", "confirmed"]).update(status="processing")
 
 
-@admin.action(description=_("Mark selected orders as Shipped"))
-def mark_shipped(modeladmin, request, queryset):
+@admin.action(description=_("Mark selected orders as Out for Delivery"))
+def mark_out_for_delivery(modeladmin, request, queryset):
     import time
     updated = 0
     for order in queryset.exclude(status__in=["delivered", "cancelled"]):
         if not order.tracking_number:
             order.tracking_number = f"TRK-{int(time.time() * 1000) % 1000000000:09d}"
-        order.status = "shipped"
+        order.status = "out_for_delivery"
         order.save(update_fields=["status", "tracking_number"])
         updated += 1
-    messages.success(request, f"{updated} order(s) marked as shipped with tracking numbers.")
-
-
-@admin.action(description=_("Mark selected orders as Out for Delivery"))
-def mark_out_for_delivery(modeladmin, request, queryset):
-    queryset.exclude(status__in=["delivered", "cancelled"]).update(
-        status="out_for_delivery"
-    )
+    messages.success(request, f"{updated} order(s) marked as out for delivery with tracking numbers.")
 
 
 @admin.action(description=_("Mark selected orders as Delivered"))
@@ -275,7 +268,7 @@ class OrderAdmin(admin.ModelAdmin):
             "classes": ("collapse",),
         }),
     )
-    actions = [mark_processing, mark_shipped, mark_out_for_delivery, mark_delivered]
+    actions = [mark_processing, mark_out_for_delivery, mark_delivered]
 
     def get_queryset(self, request):
         qs = super().get_queryset(request)
@@ -291,7 +284,6 @@ class OrderAdmin(admin.ModelAdmin):
             "pending":          ("badge-pending",     "⏳ Pending"),
             "confirmed":        ("badge-confirmed",   "✓ Confirmed"),
             "processing":       ("badge-in_progress", "⚙ Processing"),
-            "shipped":          ("badge-online",      "🚚 Shipped"),
             "out_for_delivery": ("badge-online",      "🛵 Out for Delivery"),
             "delivered":        ("badge-completed",   "✔ Delivered"),
             "cancelled":        ("badge-cancelled",   "✗ Cancelled"),

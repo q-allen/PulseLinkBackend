@@ -42,6 +42,9 @@ class User(AbstractBaseUser, PermissionsMixin):
 
     avatar = models.ImageField(upload_to='avatars/', null=True, blank=True, max_length=500)
 
+    # ── Address (stored as a single string, set during onboarding) ─────────────
+    address = models.CharField(max_length=500, blank=True, default="")
+
     # ── Profile completion (NowServing pattern: optional) ─────────────────────
     # False until the patient finishes onboarding; still optional to skip.
     # Keep blank=True so partial updates can omit this field safely.

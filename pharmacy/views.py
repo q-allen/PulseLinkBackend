@@ -168,7 +168,6 @@ def _notify_order_status(order: Order) -> None:
         messages = {
             "confirmed":        ("Order Confirmed ✓",          f"Your order {order.order_ref} has been confirmed and is being prepared."),
             "processing":       ("Order Being Processed ⚙",    f"Your order {order.order_ref} is now being processed."),
-            "shipped":          ("Order Shipped 🚚",            f"Your order {order.order_ref} is on its way!"),
             "out_for_delivery": ("Out for Delivery 🛵",         f"Your order {order.order_ref} is out for delivery. Expect it today!"),
             "delivered":        ("Order Delivered ✔",           f"Your order {order.order_ref} has been delivered. Enjoy!"),
             "cancelled":        ("Order Cancelled",             f"Your order {order.order_ref} has been cancelled."),
@@ -225,6 +224,67 @@ def _send_delivery_email(order: Order) -> None:
         logger.info("Delivery confirmation email sent for order %s", order.order_ref)
     except Exception as exc:
         logger.warning("Failed to send delivery email for %s: %s", order.order_ref, exc)
+
+
+# ── Prescription Extract view ─────────────────────────────────────────────────
+
+class PrescriptionExtractView(APIView):
+    """
+    POST /api/pharmacy/prescriptions/extract/
+    Accepts multipart/form-data with 'file'.
+    Uses AWS Textract to extract text, then matches medicine names
+    against the Medicine catalogue.
+    Returns: { medicines: [{ id, name, generic_name }] }
+    """
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        file = request.FILES.get("file")
+        if not file:
+            return Response({"detail": "No file provided."}, status=status.HTTP_400_BAD_REQUEST)
+
+        allowed_types = {"image/jpeg", "image/png", "image/webp", "application/pdf"}
+        if file.content_type not in allowed_types:
+            return Response({"detail": "Only JPG, PNG, WebP, or PDF files are allowed."}, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            import fitz  # PyMuPDF
+            file_bytes = file.read()
+            lines = []
+
+            if file.content_type == "application/pdf":
+                doc = fitz.open(stream=file_bytes, filetype="pdf")
+                for page in doc:
+                    lines.extend(page.get_text().splitlines())
+            else:
+                # For images, use PyMuPDF to open as image document
+                doc = fitz.open(stream=file_bytes, filetype="png" if "png" in file.content_type else "jpeg")
+                for page in doc:
+                    lines.extend(page.get_text().splitlines())
+
+            lines = [l.strip() for l in lines if l.strip()]
+        except Exception as exc:
+            logger.error("PDF text extraction failed: %s", exc)
+            return Response({"detail": "Could not extract text from prescription."}, status=status.HTTP_502_BAD_GATEWAY)
+
+        matched = []
+        seen_ids = set()
+        all_medicines = list(Medicine.objects.filter(in_stock=True).values("id", "name", "generic_name"))
+
+        for line in lines:
+            line_lower = line.lower().strip()
+            if len(line_lower) < 3:
+                continue
+            for med in all_medicines:
+                if med["id"] in seen_ids:
+                    continue
+                med_name_lower = med["name"].lower()
+                generic_lower = (med["generic_name"] or "").lower()
+                if med_name_lower in line_lower or (generic_lower and generic_lower in line_lower):
+                    matched.append({"id": med["id"], "name": med["name"], "generic_name": med["generic_name"]})
+                    seen_ids.add(med["id"])
+
+        return Response({"medicines": matched})
 
 
 # ── Prescription Upload view ──────────────────────────────────────────────────
@@ -657,6 +717,10 @@ class AdminOrderStatusView(APIView):
         if "status" in d:
             order.status = d["status"]
             update_fields.append("status")
+            if d["status"] == "out_for_delivery" and not order.tracking_number:
+                import time as _time
+                order.tracking_number = f"TRK-{int(_time.time() * 1000) % 1000000000:09d}"
+                update_fields.append("tracking_number")
         if "tracking_number" in d:
             order.tracking_number = d["tracking_number"]
             update_fields.append("tracking_number")

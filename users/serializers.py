@@ -68,6 +68,7 @@ class UserSerializer(serializers.ModelSerializer):
             "first_name", "middle_name", "last_name",
             "phone", "birthdate", "gender",
             "blood_type", "allergies",
+            "address",
             "role", "is_profile_complete",
             "avatar",
             "family_members",
@@ -384,6 +385,7 @@ class ProfileCompletionSerializer(serializers.ModelSerializer):
             "gender",
             "blood_type",
             "allergies",
+            "address",
             "is_profile_complete",
         ]
         extra_kwargs = {
@@ -394,6 +396,7 @@ class ProfileCompletionSerializer(serializers.ModelSerializer):
             "birthdate":   {"required": False, "allow_null": True},
             "gender":      {"required": False, "allow_blank": True},
             "blood_type":  {"required": False, "allow_blank": True},
+            "address":     {"required": False, "allow_blank": True},
             "is_profile_complete": {"required": False},
         }
 

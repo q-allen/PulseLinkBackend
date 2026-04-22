@@ -103,14 +103,18 @@ class MedicalCertificateSerializer(serializers.ModelSerializer):
 
 
 class CertificateRequestSerializer(serializers.ModelSerializer):
-    patient_name = serializers.SerializerMethodField()
-    doctor_name  = serializers.SerializerMethodField()
-    certificate  = MedicalCertificateSerializer(read_only=True)
+    patient_name    = serializers.SerializerMethodField()
+    doctor_name     = serializers.SerializerMethodField()
+    certificate     = MedicalCertificateSerializer(read_only=True)
+    patient_details = serializers.SerializerMethodField()
+    appointment_details = serializers.SerializerMethodField()
 
     class Meta:
         model  = CertificateRequest
-        fields = ["id", "patient", "patient_name", "doctor", "doctor_name",
-                  "appointment", "purpose", "notes", "status", "certificate",
+        fields = ["id", "patient", "patient_name", "patient_details",
+                  "doctor", "doctor_name",
+                  "appointment", "appointment_details",
+                  "purpose", "notes", "status", "certificate",
                   "created_at", "updated_at"]
         read_only_fields = ["id", "patient", "status", "certificate", "created_at", "updated_at"]
 
@@ -126,6 +130,37 @@ class CertificateRequestSerializer(serializers.ModelSerializer):
             return f"Dr. {name}" if name else "Physician"
         except Exception:
             return "Physician"
+
+    def get_patient_details(self, obj):
+        try:
+            p = obj.patient
+            profile = getattr(p, "patient_profile", None)
+            return {
+                "first_name": p.first_name or "",
+                "last_name":  p.last_name  or "",
+                "email":      p.email      or "",
+                "phone":      p.phone      or "",
+                "date_of_birth": getattr(profile, "date_of_birth", None) or getattr(profile, "birthdate", None) or "",
+                "gender":     getattr(profile, "sex", None) or getattr(p, "gender", None) or "",
+                "blood_type": getattr(profile, "blood_type", None) or "",
+                "address":    getattr(profile, "home_address", None) or getattr(p, "address", None) or "",
+            }
+        except Exception:
+            return {}
+
+    def get_appointment_details(self, obj):
+        try:
+            apt = obj.appointment
+            if not apt:
+                return None
+            return {
+                "id":   apt.pk,
+                "date": str(apt.date) if apt.date else "",
+                "time": str(apt.time) if apt.date else "",
+                "type": apt.type or "",
+            }
+        except Exception:
+            return None
 
 
 class CertificateRequestCreateSerializer(serializers.Serializer):
