@@ -401,7 +401,7 @@ def _send_invite_email(email: str, first_name: str, invite_url: str) -> None:
     <div style="font-family:Inter,Arial,sans-serif;max-width:520px;margin:auto;padding:32px;
                 border:1px solid #e5e7eb;border-radius:12px;">
       <h2 style="color:#0d9488;margin-bottom:4px;">PulseLink</h2>
-      <p style="color:#6b7280;font-size:14px;margin-top:0;">Healthcare, made simple.</p>
+      <p style="color:#6b7280;font-size:14px;margin-top:0;">Your health, our priority.</p>
       <hr style="border:none;border-top:1px solid #e5e7eb;margin:20px 0;">
       <p style="font-size:15px;color:#111827;">Hi <strong>Dr. {first_name}</strong>,</p>
       <p style="font-size:14px;color:#374151;">

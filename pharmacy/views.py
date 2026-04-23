@@ -200,7 +200,7 @@ def _send_delivery_email(order: Order) -> None:
         html = f"""
         <div style="font-family:Poppins,sans-serif;max-width:480px;margin:auto;padding:32px;border:1px solid #e5e7eb;border-radius:12px;">
           <h2 style="color:#0d9488;margin-bottom:4px;">PulseLink</h2>
-          <p style="color:#6b7280;font-size:14px;margin-top:0;">Healthcare, made simple.</p>
+          <p style="color:#6b7280;font-size:14px;margin-top:0;">Your health, our priority.</p>
           <hr style="border:none;border-top:1px solid #e5e7eb;margin:24px 0;">
           <p style="font-size:15px;color:#111827;">Hi {name},</p>
           <p style="font-size:15px;color:#111827;">Your order has been <strong style="color:#0d9488;">delivered</strong>! 🎉</p>

@@ -122,7 +122,7 @@ def send_follow_up_invitation_notification(self, invitation_id: int):
     html = f"""
     <div style="font-family:Poppins,sans-serif;max-width:540px;margin:auto;padding:32px;border:1px solid #e5e7eb;border-radius:12px;background:#ffffff;">
       <h2 style="color:#0d9488;margin-bottom:2px;">PulseLink</h2>
-      <p style="color:#6b7280;font-size:13px;margin-top:0;">Healthcare, made simple.</p>
+      <p style="color:#6b7280;font-size:13px;margin-top:0;">Your health, our priority.</p>
       <hr style="border:none;border-top:1px solid #e5e7eb;margin:18px 0;">
       <div style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:10px;padding:16px 18px;margin-bottom:20px;">
         <p style="margin:0;font-size:15px;font-weight:700;color:#1d4ed8;">&#128197; Follow-Up Consultation Invitation</p>
@@ -162,7 +162,7 @@ def send_follow_up_invitation_notification(self, invitation_id: int):
       <div style="text-align:center;margin:24px 0;">
         <a href="{invitation_url}" style="background:#0d9488;color:#fff;padding:13px 32px;border-radius:8px;text-decoration:none;font-weight:700;font-size:15px;">View Invitation &amp; Book</a>
       </div>
-      <p style="font-size:12px;color:#9ca3af;text-align:center;margin-top:24px;">PulseLink &mdash; Healthcare, made simple.</p>
+      <p style="font-size:12px;color:#9ca3af;text-align:center;margin-top:24px;">PulseLink &mdash; Your health, our priority.</p>
     </div>
     """
 
@@ -292,7 +292,7 @@ def send_verification_complete_email(self, doctor_profile_id: int):
     <div style="font-family:Poppins,sans-serif;max-width:520px;margin:auto;padding:32px;
                 border:1px solid #e5e7eb;border-radius:12px;">
       <h2 style="color:#0d9488;margin-bottom:4px;">PulseLink</h2>
-      <p style="color:#6b7280;font-size:14px;margin-top:0;">Healthcare, made simple.</p>
+      <p style="color:#6b7280;font-size:14px;margin-top:0;">Your health, our priority.</p>
       <hr style="border:none;border-top:1px solid #e5e7eb;margin:20px 0;">
       <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;padding:16px;margin-bottom:20px;">
         <p style="margin:0;font-size:16px;font-weight:600;color:#15803d;">&#10003; Profile Verified!</p>
@@ -314,7 +314,7 @@ def send_verification_complete_email(self, doctor_profile_id: int):
           Go to My Dashboard
         </a>
       </div>
-      <p style="font-size:12px;color:#9ca3af;text-align:center;">PulseLink &mdash; Healthcare, made simple.</p>
+      <p style="font-size:12px;color:#9ca3af;text-align:center;">PulseLink &mdash; Your health, our priority.</p>
     </div>
     """
 
@@ -594,7 +594,7 @@ def send_doctor_payment_notification(self, appointment_id: int):
     <div style="font-family:Poppins,sans-serif;max-width:540px;margin:auto;padding:32px;
                 border:1px solid #e5e7eb;border-radius:12px;background:#ffffff;">
       <h2 style="color:#0d9488;margin-bottom:2px;">PulseLink</h2>
-      <p style="color:#6b7280;font-size:13px;margin-top:0;">Healthcare, made simple.</p>
+      <p style="color:#6b7280;font-size:13px;margin-top:0;">Your health, our priority.</p>
       <hr style="border:none;border-top:1px solid #e5e7eb;margin:18px 0;">
       <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:10px;padding:14px 18px;margin-bottom:20px;">
         <p style="margin:0;font-size:15px;font-weight:700;color:#15803d;">&#10003; Payment Received</p>
@@ -634,7 +634,7 @@ def send_doctor_payment_notification(self, appointment_id: int):
            text-decoration:none;font-weight:600;font-size:14px;">View Appointment</a>
       </div>
       <p style="font-size:12px;color:#9ca3af;text-align:center;margin-top:24px;">
-        PulseLink &mdash; Healthcare, made simple.
+        PulseLink &mdash; Your health, our priority.
       </p>
     </div>
     """
@@ -760,7 +760,7 @@ def send_appointment_cancelled_email(self, appointment_id: int, refund_issued: b
     html = f"""
     <div style="font-family:Poppins,sans-serif;max-width:540px;margin:auto;padding:32px;border:1px solid #e5e7eb;border-radius:12px;">
       <h2 style="color:#0d9488;margin-bottom:4px;">PulseLink</h2>
-      <p style="color:#6b7280;font-size:13px;margin-top:0;">Healthcare, made simple.</p>
+      <p style="color:#6b7280;font-size:13px;margin-top:0;">Your health, our priority.</p>
       <hr style="border:none;border-top:1px solid #e5e7eb;margin:20px 0;">
       <div style="background:#fef2f2;border:1px solid #fecaca;border-radius:10px;padding:14px;margin-bottom:20px;">
         <p style="margin:0;font-weight:700;color:#991b1b;font-size:14px;">Appointment Cancelled</p>
@@ -787,7 +787,7 @@ def send_appointment_cancelled_email(self, appointment_id: int, refund_issued: b
       <div style="text-align:center;margin:24px 0;">
         <a href="{frontend_url}/patient/appointments" style="background:#0d9488;color:#fff;padding:11px 28px;border-radius:8px;text-decoration:none;font-weight:600;font-size:14px;">View My Appointments</a>
       </div>
-      <p style="font-size:12px;color:#9ca3af;text-align:center;margin-top:24px;">PulseLink — Healthcare, made simple.</p>
+      <p style="font-size:12px;color:#9ca3af;text-align:center;margin-top:24px;">PulseLink — Your health, our priority.</p>
     </div>
     """
 
@@ -880,7 +880,7 @@ def send_doctor_cancellation_notification(self, appointment_id: int, reason: str
     html = f"""
     <div style="font-family:Poppins,sans-serif;max-width:540px;margin:auto;padding:32px;border:1px solid #e5e7eb;border-radius:12px;">
       <h2 style="color:#0d9488;margin-bottom:4px;">PulseLink</h2>
-      <p style="color:#6b7280;font-size:13px;margin-top:0;">Healthcare, made simple.</p>
+      <p style="color:#6b7280;font-size:13px;margin-top:0;">Your health, our priority.</p>
       <hr style="border:none;border-top:1px solid #e5e7eb;margin:20px 0;">
       <div style="background:#fef2f2;border:1px solid #fecaca;border-radius:10px;padding:14px;margin-bottom:20px;">
         <p style="margin:0;font-weight:700;color:#991b1b;font-size:14px;">Appointment Cancelled</p>
@@ -903,7 +903,7 @@ def send_doctor_cancellation_notification(self, appointment_id: int, reason: str
       <div style="text-align:center;margin:24px 0;">
         <a href="{apt_url}" style="background:#0d9488;color:#fff;padding:11px 28px;border-radius:8px;text-decoration:none;font-weight:600;font-size:14px;">View Appointment</a>
       </div>
-      <p style="font-size:12px;color:#9ca3af;text-align:center;margin-top:24px;">PulseLink — Healthcare, made simple.</p>
+      <p style="font-size:12px;color:#9ca3af;text-align:center;margin-top:24px;">PulseLink — Your health, our priority.</p>
     </div>
     """
 

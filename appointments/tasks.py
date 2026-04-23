@@ -57,13 +57,13 @@ def _send_reminder_email(apt, hours: int):
     )
     if apt.video_link:
         plain += f"Join video: {apt.video_link}\n"
-    plain += "\nPulseLink — Healthcare, made simple."
+    plain += "\nPulseLink — Your health, our priority."
 
     html = f"""
     <div style="font-family:Poppins,sans-serif;max-width:520px;margin:auto;padding:32px;
                 border:1px solid #e5e7eb;border-radius:12px;">
       <h2 style="color:#0d9488;margin-bottom:4px;">PulseLink</h2>
-      <p style="color:#6b7280;font-size:14px;margin-top:0;">Healthcare, made simple.</p>
+      <p style="color:#6b7280;font-size:14px;margin-top:0;">Your health, our priority.</p>
       <hr style="border:none;border-top:1px solid #e5e7eb;margin:20px 0;">
       <p style="font-size:15px;color:#111827;">Hi <strong>{apt.patient.first_name}</strong>,</p>
       <p style="font-size:14px;color:#374151;">This is a friendly reminder that you have an appointment coming up in <strong>{hours} hour{'s' if hours > 1 else ''}</strong>:</p>
@@ -74,7 +74,7 @@ def _send_reminder_email(apt, hours: int):
         <li><strong>Type:</strong> {apt.get_type_display()}</li>
       </ul>
       {"<div style='text-align:center;margin:24px 0;'><a href='" + apt.video_link + "' style='background:#0d9488;color:#fff;padding:12px 28px;border-radius:8px;text-decoration:none;font-weight:600;'>Join Video Consult</a></div>" if apt.video_link else ""}
-      <p style="font-size:12px;color:#9ca3af;text-align:center;margin-top:24px;">PulseLink &mdash; Healthcare, made simple.</p>
+      <p style="font-size:12px;color:#9ca3af;text-align:center;margin-top:24px;">PulseLink &mdash; Your health, our priority.</p>
     </div>
     """
     try:
