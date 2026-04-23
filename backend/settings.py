@@ -51,16 +51,9 @@ INSTALLED_APPS = [
     "cloudinary",
 ]
 
-FRONTEND_URL      = os.environ.get("FRONTEND_URL", "http://localhost:3000")
+_default_frontend = "http://localhost:3000" if DEBUG else "https://pulse-link-umber.vercel.app"
+FRONTEND_URL      = os.environ.get("FRONTEND_URL", _default_frontend)
 FRONTEND_BASE_URL = os.environ.get("FRONTEND_BASE_URL", FRONTEND_URL)
-
-# Local override if explicitly set (safe in prod: unset there).
-_FRONTEND_URL_LOCAL = os.environ.get("FRONTEND_URL_LOCAL")
-_FRONTEND_BASE_URL_LOCAL = os.environ.get("FRONTEND_BASE_URL_LOCAL")
-if _FRONTEND_URL_LOCAL:
-    FRONTEND_URL = _FRONTEND_URL_LOCAL
-if _FRONTEND_BASE_URL_LOCAL:
-    FRONTEND_BASE_URL = _FRONTEND_BASE_URL_LOCAL
 BACKEND_URL       = os.environ.get("BACKEND_URL", "http://localhost:8000")
 
 # ── CORS ──────────────────────────────────────────────────────────────────────

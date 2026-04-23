@@ -75,8 +75,6 @@ try:
 except ImportError:
     _FILTER_BACKEND_AVAILABLE = False
 
-FRONTEND_URL = getattr(settings, "FRONTEND_URL", "http://localhost:3000")
-
 
 # ── Permission helpers ────────────────────────────────────────────────────────
 
@@ -286,7 +284,7 @@ class InviteDoctorView(APIView):
 
         uid = urlsafe_base64_encode(force_bytes(user.pk))
         token = default_token_generator.make_token(user)
-        invite_url = f"{FRONTEND_URL}/set-doctor-password?uid={uid}&token={token}"
+        invite_url = f"{settings.FRONTEND_URL}/set-doctor-password?uid={uid}&token={token}"
 
         # Send synchronously so SMTP errors surface in logs/response.
         _send_invite_email(user.email, user.first_name, invite_url)
