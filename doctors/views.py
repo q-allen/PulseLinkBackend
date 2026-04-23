@@ -40,6 +40,7 @@ from rest_framework.viewsets import ModelViewSet
 from rest_framework_simplejwt.tokens import RefreshToken
 
 from users.models import User
+from users.views import _set_auth_cookies
 from .filters import DoctorFilter
 from .models import DoctorAvailableSlot, DoctorProfile, PatientHMO
 from .serializers import (
@@ -338,10 +339,6 @@ class ActivateDoctorView(APIView):
         user = serializer.save()
 
         refresh = RefreshToken.for_user(user)
-        access = refresh.access_token
-        access_lifetime = settings.SIMPLE_JWT["ACCESS_TOKEN_LIFETIME"]
-        refresh_lifetime = settings.SIMPLE_JWT["REFRESH_TOKEN_LIFETIME"]
-        secure = not settings.DEBUG
 
         data = {
             "user": {
@@ -354,16 +351,7 @@ class ActivateDoctorView(APIView):
             }
         }
         response = Response(data, status=status.HTTP_200_OK)
-        response.set_cookie(
-            "access_token", str(access),
-            max_age=int(access_lifetime.total_seconds()),
-            httponly=True, secure=secure, samesite="Lax",
-        )
-        response.set_cookie(
-            "refresh_token", str(refresh),
-            max_age=int(refresh_lifetime.total_seconds()),
-            httponly=True, secure=secure, samesite="Lax",
-        )
+        _set_auth_cookies(response, refresh)
         return response
 
 
