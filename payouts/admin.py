@@ -60,23 +60,24 @@ class PayoutAdmin(admin.ModelAdmin):
         "reviewed_by",
         "created_at",
     ]
-    list_filter  = ["status", "method", "created_at"]
+    list_display_links = ["id", "colored_status"]
+    list_filter  = ["status", "method", "created_at", "doctor"]
     search_fields = [
         "doctor__first_name", "doctor__last_name", "doctor__email",
         "payout_reference", "account_number",
     ]
     readonly_fields = [
         "created_at", "updated_at", "reviewed_at",
-        "doctor_earnings_summary",
     ]
     ordering = ["-created_at"]
     date_hierarchy = "created_at"
     list_per_page = 25
+    change_form_template = "admin/payouts/payout/change_form.html"
 
     fieldsets = [
         ("Payout Request", {
             "fields": [
-                "doctor", "doctor_earnings_summary",
+                "doctor",
                 "amount", "method",
                 "account_name", "account_number", "bank_name",
                 "period_start", "period_end",
@@ -99,6 +100,90 @@ class PayoutAdmin(admin.ModelAdmin):
     ]
 
     actions = ["action_approve", "action_reject"]
+
+    # ── Change view: inject earnings + payout history + breakdown ─────────────
+
+    def change_view(self, request, object_id, form_url="", extra_context=None):
+        extra_context = extra_context or {}
+        from appointments.models import Appointment
+
+        try:
+            payout = Payout.objects.select_related("doctor").get(pk=object_id)
+        except Payout.DoesNotExist:
+            return super().change_view(request, object_id, form_url, extra_context)
+
+        doctor = payout.doctor
+
+        # ── Summary stats ─────────────────────────────────────────────────────
+        agg = (
+            Appointment.objects
+            .filter(
+                doctor=doctor,
+                status="completed",
+                payment_status="paid",
+                type__in=("online", "on_demand"),
+            )
+            .exclude(doctor_earnings=None)
+            .aggregate(
+                total_gross=Sum("fee"),
+                total_commission=Sum("platform_commission"),
+                total_earnings=Sum("doctor_earnings"),
+                count=Count("id"),
+            )
+        )
+        total_earnings = agg["total_earnings"] or Decimal("0.00")
+        paid_out = (
+            Payout.objects
+            .filter(doctor=doctor, status__in=("approved", "paid"))
+            .aggregate(t=Sum("amount"))["t"]
+        ) or Decimal("0.00")
+        pending_amt = (
+            Payout.objects
+            .filter(doctor=doctor, status="pending")
+            .aggregate(t=Sum("amount"))["t"]
+        ) or Decimal("0.00")
+        available = max(Decimal("0.00"), total_earnings - paid_out - pending_amt)
+
+        extra_context["earnings_stats"] = {
+            "doctor_name":      f"Dr. {doctor.first_name} {doctor.last_name}".strip(),
+            "consult_count":    agg["count"] or 0,
+            "total_gross":      agg["total_gross"]      or Decimal("0.00"),
+            "total_commission": agg["total_commission"] or Decimal("0.00"),
+            "total_earnings":   total_earnings,
+            "paid_out":         paid_out,
+            "pending":          pending_amt,
+            "available":        available,
+        }
+
+        # ── Payout history ────────────────────────────────────────────────────
+        extra_context["payout_history"] = (
+            Payout.objects
+            .filter(doctor=doctor)
+            .order_by("-created_at")
+            .values(
+                "id", "amount", "method", "status",
+                "payout_reference", "rejection_reason", "created_at",
+            )
+        )
+
+        # ── Appointment earnings breakdown ────────────────────────────────────
+        extra_context["earnings_breakdown"] = (
+            Appointment.objects
+            .filter(
+                doctor=doctor,
+                status="completed",
+                payment_status="paid",
+                type__in=("online", "on_demand"),
+            )
+            .exclude(doctor_earnings=None)
+            .order_by("-date")
+            .values(
+                "id", "date", "type", "fee",
+                "platform_commission", "doctor_earnings",
+            )
+        )
+
+        return super().change_view(request, object_id, form_url, extra_context)
 
     # ── List display helpers ──────────────────────────────────────────────────
 
@@ -147,90 +232,6 @@ class PayoutAdmin(admin.ModelAdmin):
                 obj.account_number,
             )
         return obj.account_name or "—"
-
-    # ── Detail page: doctor earnings summary ──────────────────────────────────
-
-    @admin.display(description="Doctor Earnings Summary")
-    def doctor_earnings_summary(self, obj):
-        """
-        Shows the doctor's total earnings, commission deducted, and payout
-        history inline on the payout detail page.
-        """
-        from appointments.models import Appointment
-
-        agg = (
-            Appointment.objects
-            .filter(
-                doctor=obj.doctor,
-                status="completed",
-                payment_status="paid",
-                type__in=("online", "on_demand"),
-            )
-            .exclude(doctor_earnings=None)
-            .aggregate(
-                total_gross=Sum("fee"),
-                total_commission=Sum("platform_commission"),
-                total_earnings=Sum("doctor_earnings"),
-                count=Count("id"),
-            )
-        )
-
-        paid_out = (
-            Payout.objects
-            .filter(doctor=obj.doctor, status__in=("approved", "paid"))
-            .aggregate(total=Sum("amount"))["total"]
-        ) or Decimal("0.00")
-
-        pending = (
-            Payout.objects
-            .filter(doctor=obj.doctor, status="pending")
-            .aggregate(total=Sum("amount"))["total"]
-        ) or Decimal("0.00")
-
-        total_earnings = agg["total_earnings"] or Decimal("0.00")
-        available = max(Decimal("0.00"), total_earnings - paid_out - pending)
-
-        return format_html(
-            """
-            <table style="border-collapse:collapse;font-size:13px;min-width:320px;">
-              <tr style="background:#f0fdfa;">
-                <td style="padding:6px 12px;color:#6b7280;">Completed Consults</td>
-                <td style="padding:6px 12px;font-weight:600;">{} appointments</td>
-              </tr>
-              <tr>
-                <td style="padding:6px 12px;color:#6b7280;">Gross Fees Collected</td>
-                <td style="padding:6px 12px;font-weight:600;">₱{:,.2f}</td>
-              </tr>
-              <tr style="background:#fef2f2;">
-                <td style="padding:6px 12px;color:#ef4444;">Platform Commission (15%)</td>
-                <td style="padding:6px 12px;font-weight:600;color:#ef4444;">−₱{:,.2f}</td>
-              </tr>
-              <tr style="background:#f0fdfa;">
-                <td style="padding:6px 12px;color:#0d9488;font-weight:600;">Doctor Net Earnings</td>
-                <td style="padding:6px 12px;font-weight:700;color:#0d9488;">₱{:,.2f}</td>
-              </tr>
-              <tr>
-                <td style="padding:6px 12px;color:#6b7280;">Already Paid Out</td>
-                <td style="padding:6px 12px;">₱{:,.2f}</td>
-              </tr>
-              <tr>
-                <td style="padding:6px 12px;color:#f59e0b;">Pending Payout</td>
-                <td style="padding:6px 12px;color:#f59e0b;">₱{:,.2f}</td>
-              </tr>
-              <tr style="background:#ecfdf5;border-top:2px solid #0d9488;">
-                <td style="padding:8px 12px;font-weight:700;color:#0d9488;">Available for Payout</td>
-                <td style="padding:8px 12px;font-weight:700;font-size:15px;color:#0d9488;">₱{:,.2f}</td>
-              </tr>
-            </table>
-            """,
-            agg["count"] or 0,
-            agg["total_gross"] or Decimal("0.00"),
-            agg["total_commission"] or Decimal("0.00"),
-            total_earnings,
-            paid_out,
-            pending,
-            available,
-        )
 
     # ── Bulk actions ──────────────────────────────────────────────────────────
 
@@ -289,62 +290,181 @@ class PayoutAdmin(admin.ModelAdmin):
     # ── Changelist: inject platform revenue summary at top ────────────────────
 
     def changelist_view(self, request, extra_context=None):
-        """Inject platform revenue summary into the changelist page."""
+        """Inject platform revenue summary or per-doctor summary depending on filter."""
         from appointments.models import Appointment
+        from django.urls import reverse as _reverse
 
         extra_context = extra_context or {}
 
-        # All-time platform revenue
-        agg = (
-            Appointment.objects
-            .filter(
-                status="completed",
-                payment_status="paid",
-                type__in=("online", "on_demand"),
-            )
-            .exclude(platform_commission=None)
-            .aggregate(
-                total_revenue=Sum("platform_commission"),
-                total_gross=Sum("fee"),
-                total_count=Count("id"),
-            )
-        )
+        # Detect if filtered to a specific doctor
+        doctor_id = request.GET.get("doctor__id__exact")
 
-        # This month
-        today = timezone.localdate()
-        month_start = today.replace(day=1)
-        month_agg = (
-            Appointment.objects
-            .filter(
-                status="completed",
-                payment_status="paid",
-                type__in=("online", "on_demand"),
-                date__gte=month_start,
-            )
-            .exclude(platform_commission=None)
-            .aggregate(
-                revenue=Sum("platform_commission"),
-                count=Count("id"),
-            )
-        )
+        if doctor_id:
+            # ── Per-doctor view ───────────────────────────────────────────────
+            try:
+                from users.models import User
+                doctor = User.objects.get(pk=doctor_id)
+            except User.DoesNotExist:
+                doctor = None
 
-        # Payout totals
-        payout_agg = Payout.objects.aggregate(
-            total_paid=Sum("amount", filter=Q(status__in=("approved", "paid"))),
-            total_pending=Sum("amount", filter=Q(status="pending")),
-            count_pending=Count("id", filter=Q(status="pending")),
-        )
+            if doctor:
+                agg = (
+                    Appointment.objects
+                    .filter(
+                        doctor=doctor,
+                        status="completed",
+                        payment_status="paid",
+                        type__in=("online", "on_demand"),
+                    )
+                    .exclude(doctor_earnings=None)
+                    .aggregate(
+                        total_gross=Sum("fee"),
+                        total_commission=Sum("platform_commission"),
+                        total_earnings=Sum("doctor_earnings"),
+                        count=Count("id"),
+                    )
+                )
+                total_earnings = agg["total_earnings"] or Decimal("0.00")
 
-        extra_context["revenue_summary"] = {
-            "total_revenue":   agg["total_revenue"]   or Decimal("0.00"),
-            "total_gross":     agg["total_gross"]      or Decimal("0.00"),
-            "total_count":     agg["total_count"]      or 0,
-            "month_revenue":   month_agg["revenue"]    or Decimal("0.00"),
-            "month_count":     month_agg["count"]      or 0,
-            "total_paid_out":  payout_agg["total_paid"]    or Decimal("0.00"),
-            "total_pending":   payout_agg["total_pending"] or Decimal("0.00"),
-            "count_pending":   payout_agg["count_pending"] or 0,
-        }
+                paid_out = (
+                    Payout.objects
+                    .filter(doctor=doctor, status__in=("approved", "paid"))
+                    .aggregate(t=Sum("amount"))["t"]
+                ) or Decimal("0.00")
+                pending = (
+                    Payout.objects
+                    .filter(doctor=doctor, status="pending")
+                    .aggregate(t=Sum("amount"))["t"]
+                ) or Decimal("0.00")
+                available = max(Decimal("0.00"), total_earnings - paid_out - pending)
+
+                extra_context["doctor_detail"] = {
+                    "name":             f"Dr. {doctor.first_name} {doctor.last_name}".strip(),
+                    "email":            doctor.email,
+                    "consult_count":    agg["count"] or 0,
+                    "total_gross":      agg["total_gross"]      or Decimal("0.00"),
+                    "total_commission": agg["total_commission"] or Decimal("0.00"),
+                    "total_earnings":   total_earnings,
+                    "paid_out":         paid_out,
+                    "pending":          pending,
+                    "available":        available,
+                    "back_url":         _reverse("admin:payouts_payout_changelist"),
+                }
+                extra_context["earnings_stats"] = extra_context["doctor_detail"]
+                extra_context["payout_history"] = list(
+                    Payout.objects.filter(doctor=doctor).order_by("-created_at")
+                    .values("id", "amount", "method", "status", "payout_reference", "rejection_reason", "created_at")
+                )
+                extra_context["earnings_breakdown"] = list(
+                    Appointment.objects
+                    .filter(doctor=doctor, status="completed", payment_status="paid", type__in=("online", "on_demand"))
+                    .exclude(doctor_earnings=None).order_by("-date")
+                    .values("id", "date", "type", "fee", "platform_commission", "doctor_earnings")
+                )
+                extra_context["doctor_rows"] = []
+                extra_context["revenue_summary"] = None
+
+        else:
+            # ── Platform-wide view ────────────────────────────────────────────
+            agg = (
+                Appointment.objects
+                .filter(
+                    status="completed",
+                    payment_status="paid",
+                    type__in=("online", "on_demand"),
+                )
+                .exclude(platform_commission=None)
+                .aggregate(
+                    total_revenue=Sum("platform_commission"),
+                    total_gross=Sum("fee"),
+                    total_count=Count("id"),
+                )
+            )
+
+            today = timezone.localdate()
+            month_start = today.replace(day=1)
+            month_agg = (
+                Appointment.objects
+                .filter(
+                    status="completed",
+                    payment_status="paid",
+                    type__in=("online", "on_demand"),
+                    date__gte=month_start,
+                )
+                .exclude(platform_commission=None)
+                .aggregate(
+                    revenue=Sum("platform_commission"),
+                    count=Count("id"),
+                )
+            )
+
+            payout_agg = Payout.objects.aggregate(
+                total_paid=Sum("amount", filter=Q(status__in=("approved", "paid"))),
+                total_pending=Sum("amount", filter=Q(status="pending")),
+                count_pending=Count("id", filter=Q(status="pending")),
+            )
+
+            extra_context["revenue_summary"] = {
+                "total_revenue": agg["total_revenue"]        or Decimal("0.00"),
+                "total_gross":   agg["total_gross"]          or Decimal("0.00"),
+                "total_count":   agg["total_count"]          or 0,
+                "month_revenue": month_agg["revenue"]        or Decimal("0.00"),
+                "month_count":   month_agg["count"]          or 0,
+                "total_paid_out":payout_agg["total_paid"]    or Decimal("0.00"),
+                "total_pending": payout_agg["total_pending"] or Decimal("0.00"),
+                "count_pending": payout_agg["count_pending"] or 0,
+            }
+
+            doctors_qs = (
+                Appointment.objects
+                .filter(
+                    status="completed",
+                    payment_status="paid",
+                    type__in=("online", "on_demand"),
+                )
+                .exclude(doctor_earnings=None)
+                .values("doctor", "doctor__first_name", "doctor__last_name", "doctor__email")
+                .annotate(
+                    total_gross=Sum("fee"),
+                    total_commission=Sum("platform_commission"),
+                    total_earnings=Sum("doctor_earnings"),
+                    consult_count=Count("id"),
+                )
+                .order_by("-total_earnings")
+            )
+
+            doctor_rows = []
+            for row in doctors_qs:
+                did = row["doctor"]
+                paid_out = (
+                    Payout.objects
+                    .filter(doctor_id=did, status__in=("approved", "paid"))
+                    .aggregate(t=Sum("amount"))["t"]
+                ) or Decimal("0.00")
+                pending = (
+                    Payout.objects
+                    .filter(doctor_id=did, status="pending")
+                    .aggregate(t=Sum("amount"))["t"]
+                ) or Decimal("0.00")
+                total_earnings = row["total_earnings"] or Decimal("0.00")
+                available = max(Decimal("0.00"), total_earnings - paid_out - pending)
+                doctor_rows.append({
+                    "id":               did,
+                    "name":             f"Dr. {row['doctor__first_name']} {row['doctor__last_name']}".strip(),
+                    "email":            row["doctor__email"],
+                    "consult_count":    row["consult_count"],
+                    "total_gross":      row["total_gross"]      or Decimal("0.00"),
+                    "total_commission": row["total_commission"] or Decimal("0.00"),
+                    "total_earnings":   total_earnings,
+                    "paid_out":         paid_out,
+                    "pending":          pending,
+                    "available":        available,
+                    "payout_url":       _reverse("admin:payouts_payout_changelist") + f"?doctor__id__exact={did}",
+                })
+            extra_context["doctor_rows"] = doctor_rows
+            extra_context["earnings_stats"] = None
+            extra_context["payout_history"] = None
+            extra_context["earnings_breakdown"] = None
 
         return super().changelist_view(request, extra_context=extra_context)
 

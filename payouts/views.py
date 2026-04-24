@@ -21,8 +21,10 @@ Commission recap:
 import logging
 from decimal import Decimal
 
+from datetime import timedelta
+
 from django.db import transaction
-from django.db.models import Sum, Count
+from django.db.models import Sum, Count, Q
 from django.utils import timezone
 from rest_framework import status
 from rest_framework.permissions import IsAuthenticated
@@ -32,7 +34,6 @@ from rest_framework.views import APIView
 from appointments.models import Appointment
 from .models import Payout
 from .serializers import (
-    DoctorEarningsSummarySerializer,
     PayoutApproveSerializer,
     PayoutRejectSerializer,
     PayoutRequestSerializer,
@@ -362,6 +363,21 @@ class DoctorEarningsDashboardView(APIView):
 
         available_earnings = max(Decimal("0.00"), total_earnings - paid_out - pending_payout)
 
+        # Today / this-week sub-aggregates
+        today      = timezone.localdate()
+        week_start = today - timedelta(days=today.weekday())
+
+        today_agg = qs.filter(date=today).aggregate(
+            earnings=Sum("doctor_earnings"),
+            commission=Sum("platform_commission"),
+            count=Count("id"),
+        )
+        week_agg = qs.filter(date__gte=week_start).aggregate(
+            earnings=Sum("doctor_earnings"),
+            commission=Sum("platform_commission"),
+            count=Count("id"),
+        )
+
         breakdown = list(
             qs.values(
                 "id", "date", "type", "fee",
@@ -378,6 +394,13 @@ class DoctorEarningsDashboardView(APIView):
             "paid_out":           paid_out,
             "pending_payout":     pending_payout,
             "completed_count":    qs.count(),
+            "commission_rate":    "0.15",
+            "today_earnings":     today_agg["earnings"]   or Decimal("0.00"),
+            "today_commission":   today_agg["commission"] or Decimal("0.00"),
+            "today_consults":     today_agg["count"]      or 0,
+            "week_earnings":      week_agg["earnings"]    or Decimal("0.00"),
+            "week_commission":    week_agg["commission"]  or Decimal("0.00"),
+            "week_consults":      week_agg["count"]       or 0,
             "breakdown":          breakdown,
         })
 
@@ -438,8 +461,8 @@ class AdminRevenueDashboardView(APIView):
 
         # Payout summary for admin
         payout_summary = Payout.objects.aggregate(
-            total_paid_out=Sum("amount", filter=models_q(status__in=("approved", "paid"))),
-            total_pending=Sum("amount",  filter=models_q(status="pending")),
+            total_paid_out=Sum("amount", filter=Q(status__in=("approved", "paid"))),
+            total_pending=Sum("amount",  filter=Q(status="pending")),
         )
 
         return Response({
@@ -454,10 +477,4 @@ class AdminRevenueDashboardView(APIView):
             },
         })
 
-
-# ── Q import helper (avoids top-level circular import) ───────────────────────
-
-def models_q(**kwargs):
-    from django.db.models import Q
-    return Q(**kwargs)
 

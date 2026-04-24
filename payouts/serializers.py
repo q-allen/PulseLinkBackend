@@ -96,6 +96,13 @@ class DoctorEarningsSummarySerializer(serializers.Serializer):
     paid_out           = serializers.DecimalField(max_digits=12, decimal_places=2)
     pending_payout     = serializers.DecimalField(max_digits=12, decimal_places=2)
     completed_count    = serializers.IntegerField()
+    commission_rate    = serializers.CharField()
+    today_earnings     = serializers.DecimalField(max_digits=12, decimal_places=2)
+    today_commission   = serializers.DecimalField(max_digits=12, decimal_places=2)
+    today_consults     = serializers.IntegerField()
+    week_earnings      = serializers.DecimalField(max_digits=12, decimal_places=2)
+    week_commission    = serializers.DecimalField(max_digits=12, decimal_places=2)
+    week_consults      = serializers.IntegerField()
     breakdown          = serializers.ListField(child=serializers.DictField())
 
 

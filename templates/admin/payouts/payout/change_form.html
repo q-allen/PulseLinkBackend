@@ -1,0 +1,181 @@
+{% extends "admin/change_form.html" %}
+{% load i18n %}
+
+{% block form_top %}
+{{ block.super }}
+{% if earnings_stats %}
+
+{# ── Commission info banner ── #}
+<div style="display:flex;align-items:flex-start;gap:10px;padding:12px 16px;border-radius:10px;background:#eff6ff;border:1px solid #bfdbfe;margin-bottom:16px;">
+  <span style="color:#2563eb;font-size:1rem;margin-top:1px;">ℹ</span>
+  <div style="font-size:0.82rem;color:#1e40af;line-height:1.5;">
+    <strong>How commissions work:</strong>
+    PulseLink takes a <strong>15% platform fee</strong> on every completed online consultation.
+    The doctor keeps <strong>85%</strong>. In-clinic consultations have <strong>0% commission</strong>.
+  </div>
+</div>
+
+{# ── Summary stat cards ── #}
+<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin-bottom:20px;">
+
+  <div style="background:linear-gradient(135deg,#2dd4bf,#0f766e);border-radius:14px;padding:18px 16px;color:#fff;box-shadow:0 4px 12px rgba(0,0,0,0.1);">
+    <div style="font-size:0.68rem;font-weight:700;text-transform:uppercase;letter-spacing:.06em;opacity:.85;">Total Net Earnings</div>
+    <div style="font-size:1.5rem;font-weight:800;margin-top:6px;line-height:1;">₱{{ earnings_stats.total_earnings|floatformat:2 }}</div>
+    <div style="font-size:0.7rem;opacity:.7;margin-top:4px;">{{ earnings_stats.consult_count }} consult{{ earnings_stats.consult_count|pluralize }}</div>
+  </div>
+
+  <div style="background:linear-gradient(135deg,#fca5a5,#dc2626);border-radius:14px;padding:18px 16px;color:#fff;box-shadow:0 4px 12px rgba(0,0,0,0.1);">
+    <div style="font-size:0.68rem;font-weight:700;text-transform:uppercase;letter-spacing:.06em;opacity:.85;">Commission Deducted</div>
+    <div style="font-size:1.5rem;font-weight:800;margin-top:6px;line-height:1;">₱{{ earnings_stats.total_commission|floatformat:2 }}</div>
+    <div style="font-size:0.7rem;opacity:.7;margin-top:4px;">15% platform fee</div>
+  </div>
+
+  <div style="background:linear-gradient(135deg,#fbbf24,#d97706);border-radius:14px;padding:18px 16px;color:#fff;box-shadow:0 4px 12px rgba(0,0,0,0.1);">
+    <div style="font-size:0.68rem;font-weight:700;text-transform:uppercase;letter-spacing:.06em;opacity:.85;">Available for Payout</div>
+    <div style="font-size:1.5rem;font-weight:800;margin-top:6px;line-height:1;">₱{{ earnings_stats.available|floatformat:2 }}</div>
+    <div style="font-size:0.7rem;opacity:.7;margin-top:4px;">Ready to withdraw</div>
+  </div>
+
+  <div style="background:linear-gradient(135deg,#4ade80,#15803d);border-radius:14px;padding:18px 16px;color:#fff;box-shadow:0 4px 12px rgba(0,0,0,0.1);">
+    <div style="font-size:0.68rem;font-weight:700;text-transform:uppercase;letter-spacing:.06em;opacity:.85;">Total Paid Out</div>
+    <div style="font-size:1.5rem;font-weight:800;margin-top:6px;line-height:1;">₱{{ earnings_stats.paid_out|floatformat:2 }}</div>
+    <div style="font-size:0.7rem;opacity:.7;margin-top:4px;">Approved &amp; paid</div>
+  </div>
+
+  <div style="background:linear-gradient(135deg,#a78bfa,#6d28d9);border-radius:14px;padding:18px 16px;color:#fff;box-shadow:0 4px 12px rgba(0,0,0,0.1);">
+    <div style="font-size:0.68rem;font-weight:700;text-transform:uppercase;letter-spacing:.06em;opacity:.85;">Gross Fees</div>
+    <div style="font-size:1.5rem;font-weight:800;margin-top:6px;line-height:1;">₱{{ earnings_stats.total_gross|floatformat:2 }}</div>
+    <div style="font-size:0.7rem;opacity:.7;margin-top:4px;">Before commission</div>
+  </div>
+
+  <div style="background:linear-gradient(135deg,#fb923c,#c2410c);border-radius:14px;padding:18px 16px;color:#fff;box-shadow:0 4px 12px rgba(0,0,0,0.1);">
+    <div style="font-size:0.68rem;font-weight:700;text-transform:uppercase;letter-spacing:.06em;opacity:.85;">Pending Payout</div>
+    <div style="font-size:1.5rem;font-weight:800;margin-top:6px;line-height:1;">₱{{ earnings_stats.pending|floatformat:2 }}</div>
+    <div style="font-size:0.7rem;opacity:.7;margin-top:4px;">Under review</div>
+  </div>
+
+</div>
+{% endif %}
+{% endblock %}
+
+{% block after_field_sets %}
+{{ block.super }}
+{% if earnings_stats %}
+
+{# ── Payout History ── #}
+<div class="col-12">
+<div class="card mb-3">
+  <div class="card-header d-flex align-items-center">
+    <i class="fas fa-history me-2 cc-icon-color-teal"></i>
+    <strong>Payout History — {{ earnings_stats.doctor_name }}</strong>
+  </div>
+  <div class="card-body p-0">
+    {% if payout_history %}
+    <table class="cc-table w-100">
+      <thead>
+        <tr>
+          <th>#</th>
+          <th>Date</th>
+          <th>Method</th>
+          <th class="text-right">Amount</th>
+          <th>Reference</th>
+          <th>Status</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for p in payout_history %}
+        <tr>
+          <td style="color:#94a3b8;font-size:0.75rem;">#{{ p.id }}</td>
+          <td style="color:#64748b;font-size:0.8rem;">{{ p.created_at|date:"M d, Y" }}</td>
+          <td>
+            {% if p.method == "gcash" %}📱 GCash
+            {% elif p.method == "bank_transfer" %}🏦 Bank Transfer
+            {% elif p.method == "maya" %}💳 Maya
+            {% else %}💰 Other{% endif %}
+          </td>
+          <td class="text-right" style="font-weight:700;color:#0d9488;">₱{{ p.amount|floatformat:2 }}</td>
+          <td style="font-family:monospace;font-size:0.78rem;color:#64748b;">{{ p.payout_reference|default:"—" }}</td>
+          <td>
+            {% if p.status == "pending" %}
+              <span style="background:#fffbeb;color:#f59e0b;padding:2px 10px;border-radius:999px;font-size:0.72rem;font-weight:600;">⏳ Pending</span>
+            {% elif p.status == "approved" %}
+              <span style="background:#ecfdf5;color:#10b981;padding:2px 10px;border-radius:999px;font-size:0.72rem;font-weight:600;">✓ Approved</span>
+            {% elif p.status == "paid" %}
+              <span style="background:#f0fdfa;color:#0d9488;padding:2px 10px;border-radius:999px;font-size:0.72rem;font-weight:600;">✅ Paid</span>
+            {% elif p.status == "rejected" %}
+              <span style="background:#fef2f2;color:#ef4444;padding:2px 10px;border-radius:999px;font-size:0.72rem;font-weight:600;">✗ Rejected</span>
+              {% if p.rejection_reason %}<div style="font-size:0.7rem;color:#ef4444;margin-top:2px;">{{ p.rejection_reason }}</div>{% endif %}
+            {% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% else %}
+    <div style="text-align:center;padding:32px;color:#94a3b8;">
+      <div style="font-size:2rem;margin-bottom:8px;">💳</div>
+      <p style="font-weight:500;margin:0;">No payout requests yet</p>
+    </div>
+    {% endif %}
+  </div>
+</div>
+
+{# ── Appointment Earnings Breakdown ── #}
+<div class="card mb-3">
+  <div class="card-header d-flex align-items-center justify-content-between">
+    <div>
+      <i class="fas fa-calendar-check me-2 cc-icon-color-teal"></i>
+      <strong>Appointment Earnings Breakdown</strong>
+    </div>
+    <span style="background:#e0f2fe;color:#0369a1;font-size:0.72rem;border-radius:999px;padding:2px 10px;font-weight:600;">
+      {{ earnings_stats.consult_count }} completed
+    </span>
+  </div>
+  <div class="card-body p-0">
+    {% if earnings_breakdown %}
+    <table class="cc-table w-100">
+      <thead>
+        <tr>
+          <th>Date</th>
+          <th>Type</th>
+          <th class="text-right">Gross Fee</th>
+          <th class="text-right" style="color:#ef4444;">Commission (15%)</th>
+          <th class="text-right" style="color:#0d9488;">Your Earnings</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for item in earnings_breakdown %}
+        <tr>
+          <td style="color:#64748b;">{{ item.date|date:"M d, Y" }}</td>
+          <td>
+            <span style="background:#dbeafe;color:#1d4ed8;padding:2px 8px;border-radius:999px;font-size:0.72rem;font-weight:600;">
+              {% if item.type == "on_demand" %}On-Demand{% else %}{{ item.type|capfirst }}{% endif %}
+            </span>
+          </td>
+          <td class="text-right" style="font-weight:500;">₱{{ item.fee|floatformat:2 }}</td>
+          <td class="text-right" style="color:#ef4444;">−₱{{ item.platform_commission|floatformat:2 }}</td>
+          <td class="text-right" style="font-weight:700;color:#0d9488;">₱{{ item.doctor_earnings|floatformat:2 }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+      <tfoot>
+        <tr style="background:#f0fdfa;border-top:2px solid #0d9488;">
+          <td colspan="2" style="padding:10px 14px;font-weight:700;color:#0f172a;">Total</td>
+          <td class="text-right" style="padding:10px 14px;font-weight:700;">₱{{ earnings_stats.total_gross|floatformat:2 }}</td>
+          <td class="text-right" style="padding:10px 14px;font-weight:700;color:#ef4444;">−₱{{ earnings_stats.total_commission|floatformat:2 }}</td>
+          <td class="text-right" style="padding:10px 14px;font-weight:700;color:#0d9488;">₱{{ earnings_stats.total_earnings|floatformat:2 }}</td>
+        </tr>
+      </tfoot>
+    </table>
+    {% else %}
+    <div style="text-align:center;padding:32px;color:#94a3b8;">
+      <div style="font-size:2rem;margin-bottom:8px;">📋</div>
+      <p style="font-weight:500;margin:0;">No completed online consultations yet</p>
+    </div>
+    {% endif %}
+  </div>
+</div>
+</div>
+
+{% endif %}
+{% endblock %}
