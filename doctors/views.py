@@ -164,7 +164,7 @@ class DoctorViewSet(ModelViewSet):
         base = (
             DoctorProfile.objects
             .select_related("user")
-            .prefetch_related("hospitals", "services", "hmos")
+            .prefetch_related("services", "hmos")
             .filter(invite_accepted=True, user__is_active=True)
         )
         if not (self.request.user.is_authenticated and self.request.user.is_staff):
