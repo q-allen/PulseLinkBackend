@@ -477,7 +477,6 @@ JAZZMIN_SETTINGS = {
         "users.user":                   "fas fa-user-circle",
         "doctors.doctorprofile":        "fas fa-user-md",
         "doctors.patienthmo":           "fas fa-id-card",
-        "doctors.doctorhospital":       "fas fa-hospital",
         "doctors.doctorservice":        "fas fa-hand-holding-medical",
         "doctors.doctorhmo":            "fas fa-shield-alt",
         "appointments.appointment":     "fas fa-calendar-check",

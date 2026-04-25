@@ -368,30 +368,6 @@ class DoctorAvailableSlot(models.Model):
         return f"{status} {self.doctor} | {self.date} {self.start_time}–{self.end_time}"
 
 
-class DoctorHospital(models.Model):
-    """
-    Additional hospitals/clinics where the doctor practices.
-    A doctor may have a primary clinic on DoctorProfile plus affiliations here.
-    """
-
-    doctor = models.ForeignKey(
-        DoctorProfile,
-        on_delete=models.CASCADE,
-        related_name="hospitals",
-    )
-    name = models.CharField(max_length=200, help_text="Hospital or clinic name.")
-    address = models.TextField(blank=True)
-    city = models.CharField(max_length=100, blank=True)
-
-    class Meta:
-        verbose_name = "Doctor Hospital"
-        verbose_name_plural = "Doctor Hospitals"
-        ordering = ["name"]
-
-    def __str__(self):
-        return f"{self.name} ({self.doctor})"
-
-
 class DoctorService(models.Model):
     """
     Services offered by the doctor, e.g. Medical Certificate, Follow-up Consult.

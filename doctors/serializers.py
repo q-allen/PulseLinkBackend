@@ -25,7 +25,7 @@ from rest_framework import serializers
 
 from users.models import User
 from users.serializers import validate_password_strength
-from .models import DoctorAvailableSlot, DoctorHMO, DoctorHospital, DoctorProfile, DoctorService, PatientHMO
+from .models import DoctorAvailableSlot, DoctorHMO, DoctorProfile, DoctorService, PatientHMO
 
 PHONE_REGEX = re.compile(r"^\+639\d{9}$")
 
@@ -34,12 +34,6 @@ WEEKDAYS = {"monday", "tuesday", "wednesday", "thursday", "friday", "saturday", 
 
 
 # ── Nested relation serializers ───────────────────────────────────────────────
-
-class DoctorHospitalSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = DoctorHospital
-        fields = ["id", "name", "address", "city"]
-
 
 class DoctorServiceSerializer(serializers.ModelSerializer):
     class Meta:
@@ -143,7 +137,6 @@ class DoctorDetailSerializer(serializers.ModelSerializer):
     is_available_now  = serializers.SerializerMethodField()
     profile_photo     = serializers.SerializerMethodField()
     signature         = serializers.SerializerMethodField()
-    hospitals         = DoctorHospitalSerializer(many=True, read_only=True)
     services          = DoctorServiceSerializer(many=True, read_only=True)
     hmos              = DoctorHMOSerializer(many=True, read_only=True)
     avg_rating        = serializers.SerializerMethodField()
@@ -162,7 +155,7 @@ class DoctorDetailSerializer(serializers.ModelSerializer):
             "consultation_fee_online", "consultation_fee_in_person",
             "is_on_demand", "is_available_now", "is_verified", "invite_accepted", "last_active_at",
             "weekly_schedule",
-            "hospitals", "services", "hmos",
+            "services", "hmos",
             "avg_rating", "review_count", "recent_reviews",
             "accepts_online", "accepts_in_clinic",
             "created_at", "updated_at",

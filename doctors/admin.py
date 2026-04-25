@@ -20,17 +20,11 @@ from django.utils.html import format_html
 from django.utils.http import urlsafe_base64_encode
 
 from users.models import User
-from .models import DoctorHMO, DoctorHospital, DoctorProfile, DoctorService, PatientHMO
+from .models import DoctorHMO, DoctorProfile, DoctorService, PatientHMO
 
 logger = logging.getLogger(__name__)
 
 # ── Inlines ───────────────────────────────────────────────────────────────────
-
-class DoctorHospitalInline(admin.TabularInline):
-    model  = DoctorHospital
-    extra  = 1
-    fields = ("name", "address", "city")
-
 
 class DoctorServiceInline(admin.TabularInline):
     model  = DoctorService
@@ -212,7 +206,7 @@ class DoctorProfileAdmin(admin.ModelAdmin):
         "face_verification_preview", "face_verification_status", "face_verification_error",
     )
     ordering              = ("-created_at",)
-    inlines               = [DoctorHospitalInline, DoctorServiceInline, DoctorHMOInline]
+    inlines               = [DoctorServiceInline, DoctorHMOInline]
     list_per_page         = 25
     show_full_result_count = True
 
@@ -362,13 +356,6 @@ class DoctorProfileAdmin(admin.ModelAdmin):
 
 
 # ── Related model admins ──────────────────────────────────────────────────────
-
-@admin.register(DoctorHospital)
-class DoctorHospitalAdmin(admin.ModelAdmin):
-    list_display  = ("name", "city", "doctor")
-    search_fields = ("name", "doctor__user__last_name")
-    list_filter   = ("city",)
-
 
 @admin.register(DoctorService)
 class DoctorServiceAdmin(admin.ModelAdmin):
